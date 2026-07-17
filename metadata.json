@@ -1,0 +1,6 @@
+{
+  "name": "ComexPilot",
+  "description": "Copiloto de inteligência aduaneira e auditoria do comércio exterior brasileiro. Analise Invoices, extraia itens e gere a Segunda Página de Alertas do Fiscal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
