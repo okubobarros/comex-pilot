@@ -39,6 +39,27 @@ export interface InvoiceAnalysis {
   isCustomUpload: boolean;
 }
 
+export type WorkspaceStatus = 'empty' | 'loading' | 'complete';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  variant?: 'text' | 'audio' | 'file';
+}
+
+export interface LiPrefillData {
+  ncm: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  origin: string;
+  legalRule: string;
+  exporter: string;
+  manufacturer: string;
+}
+
 export interface NcmRule {
   ncm: string;
   description: string;

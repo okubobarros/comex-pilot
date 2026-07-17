@@ -1,0 +1,231 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Mic, Paperclip, ArrowUp, Scale, Check, Loader2 } from 'lucide-react';
+import { ChatMessage } from '../types';
+
+export interface SuggestionPill {
+  label: string;
+  presetIndex: number;
+}
+
+export interface ThinkingState {
+  steps: string[];
+  index: number;
+}
+
+interface ChatPanelProps {
+  messages: ChatMessage[];
+  isBusy: boolean;
+  /** Pensamentos do agente durante a auditoria; null exibe o indicador de digitação padrão */
+  thinking: ThinkingState | null;
+  aiStatus: 'idle' | 'success' | 'simulated';
+  suggestions: SuggestionPill[];
+  onSuggestion: (pill: SuggestionPill) => void;
+  onSendText: (text: string) => void;
+  onMic: () => void;
+  onFile: (fileName: string) => void;
+}
+
+/** Renderiza **negrito** simples nas respostas do agente. */
+function renderRich(text: string) {
+  return text.split('**').map((part, i) =>
+    i % 2 === 1 ? <strong key={i} className="font-semibold text-slate-800">{part}</strong> : <React.Fragment key={i}>{part}</React.Fragment>
+  );
+}
+
+const WAVE_BARS = [6, 12, 18, 10, 4, 16, 22, 14, 8, 18, 12, 6, 16, 10, 14];
+
+export default function ChatPanel({ messages, isBusy, thinking, aiStatus, suggestions, onSuggestion, onSendText, onMic, onFile }: ChatPanelProps) {
+  const [draft, setDraft] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, isBusy, thinking?.index]);
+
+  const submit = () => {
+    const text = draft.trim();
+    if (!text || isBusy) return;
+    setDraft('');
+    onSendText(text);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (isBusy) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) onFile(file.name);
+  };
+
+  return (
+    <section className="flex h-full w-[40%] min-w-[380px] shrink-0 flex-col border-r border-slate-200 bg-white" id="chat-panel">
+
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+        <div>
+          <h2 className="font-display text-sm font-semibold tracking-tight text-slate-900">Painel de Comando</h2>
+          <p className="text-xs text-slate-400">Auditoria aduaneira conversacional</p>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-500">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+          </span>
+          <span className="font-mono uppercase tracking-wider">
+            {aiStatus === 'simulated' ? 'Motor Local' : 'Gemini Ativo'}
+          </span>
+        </div>
+      </div>
+
+      {/* Message feed */}
+      <div ref={feedRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5" id="chat-feed">
+        {messages.map((msg) => (
+          msg.role === 'assistant' ? (
+            <div key={msg.id} className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+                <Scale className="h-3.5 w-3.5" />
+              </div>
+              <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed text-slate-600">
+                {renderRich(msg.text)}
+              </div>
+            </div>
+          ) : (
+            <div key={msg.id} className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-slate-900 px-3.5 py-2.5 text-sm leading-relaxed text-slate-100">
+                {msg.variant === 'audio' ? (
+                  <div className="flex items-center gap-2">
+                    <Mic className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                    <div className="flex h-5 items-center gap-0.5">
+                      {WAVE_BARS.map((h, i) => (
+                        <span key={i} style={{ height: `${h}px` }} className="w-[3px] rounded-full bg-slate-500"></span>
+                      ))}
+                    </div>
+                    <span className="font-mono text-[11px] text-slate-400">0:14</span>
+                  </div>
+                ) : msg.variant === 'file' ? (
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-300" />
+                    <span className="font-mono text-xs">{msg.text}</span>
+                  </div>
+                ) : (
+                  msg.text
+                )}
+              </div>
+            </div>
+          )
+        ))}
+
+        {isBusy && (
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <Scale className="h-3.5 w-3.5" />
+            </div>
+            {thinking ? (
+              <div className="space-y-2.5 rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3.5 py-3" id="agent-thoughts">
+                {thinking.steps.slice(0, thinking.index + 1).map((step, i) => (
+                  <div key={step} className="flex items-center gap-2 text-sm">
+                    {i < thinking.index ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    ) : (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-500" />
+                    )}
+                    <span className={i < thinking.index ? 'text-slate-400' : 'text-slate-600'}>{step}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3.5 py-3">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]"></span>
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]"></span>
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]"></span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Suggestion pills + command input */}
+      <div className="border-t border-slate-200 px-5 py-4">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {suggestions.map((pill) => (
+            <button
+              key={pill.label}
+              onClick={() => onSuggestion(pill)}
+              disabled={isBusy}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-40"
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          className={`flex items-center gap-1.5 rounded-xl border p-1.5 transition ${
+            dragOver ? 'border-indigo-500 bg-indigo-50/60' : 'border-slate-300 bg-white focus-within:border-slate-400'
+          }`}
+          id="command-input-bar"
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFile(file.name);
+              e.target.value = '';
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isBusy}
+            title="Anexar Invoice ou BL"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+            placeholder={dragOver ? 'Solte o documento para auditar...' : 'Pergunte ao ComexPilot...'}
+            disabled={isBusy}
+            className="min-w-0 flex-1 bg-transparent px-1 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-50"
+          />
+
+          <button
+            onClick={onMic}
+            disabled={isBusy}
+            title="Simular áudio do despachante (WhatsApp)"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
+          >
+            <Mic className="h-4 w-4" />
+          </button>
+          <button
+            onClick={submit}
+            disabled={isBusy || !draft.trim()}
+            title="Enviar comando"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition hover:bg-slate-700 disabled:opacity-30"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mt-2 text-center font-mono text-[10px] text-slate-300">
+          IN RFB 1986/2020 · RDC ANVISA 752/2022 · GECEX 227/2021
+        </p>
+      </div>
+    </section>
+  );
+}
