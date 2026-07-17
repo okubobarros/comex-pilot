@@ -15,7 +15,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT ?? 3000);
 
 // Initialize Gemini Client safely (with lazy loading / guard)
 let ai: GoogleGenAI | null = null;
@@ -634,7 +634,10 @@ function calculateRiskScore(alerts: any[]): number {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
