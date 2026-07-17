@@ -4,24 +4,16 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ShieldAlert, 
-  AlertTriangle, 
-  CheckCircle, 
-  TrendingUp, 
-  FileText, 
-  Sliders, 
-  HelpCircle, 
-  Info, 
-  Scale, 
-  DollarSign, 
-  Briefcase, 
-  RefreshCw, 
-  Layers, 
+import {
+  ShieldAlert,
+  AlertTriangle,
+  CheckCircle,
+  TrendingUp,
+  Info,
+  Scale,
+  DollarSign,
+  RefreshCw,
   Sparkles,
-  BookOpen,
-  Check,
-  AlertCircle,
   Search,
   Download,
   Upload,
@@ -29,11 +21,8 @@ import {
   Square,
   User,
   FileCode,
-  MapPin,
   Activity,
   Phone,
-  MessageSquare,
-  ChevronRight,
   X,
   FileSpreadsheet
 } from 'lucide-react';
@@ -74,7 +63,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
-  const [showGuide, setShowGuide] = useState<boolean>(true);
+  const [sidebarTab, setSidebarTab] = useState<'upload' | 'audio' | 'ncm'>('upload');
   const [aiStatus, setAiStatus] = useState<'idle' | 'success' | 'simulated'>('success');
   
   // Concierge Search State
@@ -920,128 +909,87 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
-      
-      {/* Top Professional Header Bar */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-40 px-4 py-3 sm:px-6 lg:px-8 shadow-xs" id="header-bar">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm">
-              <Scale className="w-5 h-5" />
+
+      {/* Clean top header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8" id="header-bar">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <Scale className="h-5 w-5" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-lg font-bold tracking-tight text-slate-900 font-display">ComexPilot</span>
-                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-4xs font-bold text-indigo-700 uppercase tracking-widest font-mono border border-indigo-100">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-base font-semibold tracking-tight text-slate-900">ComexPilot</span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
                   Audit Intelligence
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500">Copiloto Aduaneiro de Despacho e Prevenção de Canal Vermelho • ANVISA • MAPA</p>
+              <p className="text-xs text-slate-400">Copiloto aduaneiro de triagem preventiva</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <button 
-              onClick={() => setShowGuide(!showGuide)}
-              className="flex items-center space-x-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-              id="btn-tutorial-guide"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-              <span>{showGuide ? 'Ocultar Legislação' : 'Guia Normativo'}</span>
-            </button>
-            <div className="flex items-center space-x-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-4xs font-bold text-slate-600">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-              </span>
-              <span className="font-mono">GEMINI 3.5 ACTIVE</span>
-            </div>
+          <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-medium text-slate-500">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            </span>
+            <span className="font-mono uppercase tracking-wider">
+              {aiStatus === 'simulated' ? 'Modo Heurístico' : 'Gemini Ativo'}
+            </span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8" id="main-content">
-        
-        {/* Educational Legislação Segment */}
-        {showGuide && (
-          <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 shadow-2xs transition-all" id="educational-guide-banner">
-            <div className="flex items-start space-x-3">
-              <div className="rounded-lg bg-indigo-100 p-2 text-indigo-700 shrink-0">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-xs font-bold text-indigo-950 font-display">Conformidade Adiantada na Importação de Cosméticos</h3>
-                <p className="text-xs text-indigo-900/95 leading-relaxed">
-                  O Capítulo 33 da NCM (Cosméticos e Higiene) é severamente fiscalizado no Brasil. Segundo a <strong>RDC 752/2022</strong> e as atualizações da <strong>RDC 907/2024 da ANVISA</strong>, qualquer desembaraço exige registro de <strong>Licença de Importação (LI) pré-embarque</strong>. Divergências de preço unitário e descrições com "apelo orgânico/vegetal" induzem conflitos imediatos com o MAPA, paralisando cargas no canal cinza de combate a fraudes aduaneiras.
-                </p>
-                <div className="pt-2 grid gap-2 sm:grid-cols-3">
-                  <div className="bg-white/80 p-2 rounded border border-indigo-100 text-3xs">
-                    <strong className="text-rose-700 block">🛑 Canal Cinza (IN 1986/20)</strong>
-                    Preços abaixo do valor de referência de mercado geram retenção imediata de até 180 dias para valoração.
-                  </div>
-                  <div className="bg-white/80 p-2 rounded border border-indigo-100 text-3xs">
-                    <strong className="text-amber-700 block">⚠️ Conflito ANVISA x MAPA</strong>
-                    Termos como "Organic" ou "Aloe Vera" acionam duplo canal fiscal aduaneiro Saúde + Agricultura.
-                  </div>
-                  <div className="bg-white/80 p-2 rounded border border-indigo-100 text-3xs">
-                    <strong className="text-emerald-700 block">💵 Oportunidade Ex-Tarifário</strong>
-                    Redução compulsória legal de II a 0% para insumos produtivos e bens de capital sem similar nacional.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+      <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8" id="main-content">
 
-        {/* Global Live Statistics Row */}
-        <div className="mb-6 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
+        {/* Metrics row */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Probabilidade Canal Vermelho</span>
-              <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-xl font-bold font-mono text-slate-900">{activeScenario.riskScore}%</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold border ${getRiskBadgeColor(activeScenario.riskScore)}`}>
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Prob. Canal Vermelho</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl font-semibold text-slate-900">{activeScenario.riskScore}%</span>
+                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${getRiskBadgeColor(activeScenario.riskScore)}`}>
                   {getRiskLabel(activeScenario.riskScore)}
                 </span>
               </div>
-              <span className="text-3xs text-slate-400 block mt-0.5">Simulação de parametrização fiscal</span>
             </div>
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center border ${activeScenario.riskScore >= 70 ? 'bg-rose-50 border-rose-100 text-rose-500' : 'bg-indigo-50 border-indigo-100 text-indigo-500'}`}>
-              <Activity className="w-5 h-5" />
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${activeScenario.riskScore >= 70 ? 'border-rose-100 bg-rose-50 text-rose-500' : 'border-indigo-100 bg-indigo-50 text-indigo-500'}`}>
+              <Activity className="h-5 w-5" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total FOB Declarado</span>
-              <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-xl font-bold font-mono text-slate-900">{formatCurrency(activeScenario.totalFobUsd, activeScenario.currency)}</span>
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Total FOB Declarado</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl font-semibold text-slate-900">{formatCurrency(activeScenario.totalFobUsd, activeScenario.currency)}</span>
               </div>
-              <span className="text-3xs text-slate-500 block mt-0.5">{activeScenario.items.length} itens aduaneiros ativos</span>
+              <span className="mt-0.5 block text-xs text-slate-400">{activeScenario.items.length} itens ativos</span>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
-              <FileSpreadsheet className="w-5 h-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-slate-500">
+              <FileSpreadsheet className="h-5 w-5" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Divergências Críticas</span>
-              <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-xl font-bold font-mono text-rose-600">{redAlertsCount}</span>
-                <span className="text-3xs text-rose-500 font-bold uppercase">Irregularidades</span>
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Divergências Críticas</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl font-semibold text-rose-600">{redAlertsCount}</span>
               </div>
-              <span className="text-3xs text-slate-400 block mt-0.5">Exigem Licença ou ajuste aduaneiro urgente</span>
+              <span className="mt-0.5 block text-xs text-slate-400">Exigem ação urgente</span>
             </div>
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center border ${redAlertsCount > 0 ? 'bg-rose-50 border-rose-100 text-rose-500 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-              <ShieldAlert className="w-5 h-5" />
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${redAlertsCount > 0 ? 'border-rose-100 bg-rose-50 text-rose-500' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>
+              <ShieldAlert className="h-5 w-5" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Oportunidades de Caixa</span>
-              <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-xl font-bold font-mono text-emerald-600">
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Oportunidades de Caixa</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl font-semibold text-emerald-600">
                   R$ {activeScenario.items.reduce((total, item) => {
                     const cleanItemNcm = (item.ncm || "").replace(/[^0-9]/g, "");
                     const rule = customRules.find(r => r.ncm.replace(/[^0-9]/g, "").startsWith(cleanItemNcm) || cleanItemNcm.startsWith(r.ncm.replace(/[^0-9]/g, "")));
@@ -1059,391 +1007,357 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
                   }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
               </div>
-              <span className="text-3xs text-slate-500 block mt-0.5">Economias federais via benefícios</span>
+              <span className="mt-0.5 block text-xs text-slate-400">Benefícios federais mapeados</span>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-              <DollarSign className="w-5 h-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-600">
+              <DollarSign className="h-5 w-5" />
             </div>
           </div>
         </div>
 
-        {/* 2-Column Main Workspace */}
-        <div className="grid gap-6 lg:grid-cols-12">
-          
-          {/* LEFT SIDEBAR WORKSPACE: Concierge, WhatsApp Audio & Uploads */}
-          <div className="lg:col-span-5 space-y-6">
+        {/* Workspace: tabbed sidebar (left) + wide audit feed (right) */}
+        <div className="grid items-start gap-6 lg:grid-cols-12">
 
-            {/* 1. INTERACTIVE "CONCIERGE" WIDGET */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs" id="concierge-widget">
-              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-3">
-                <div className="h-7 w-7 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-800 font-display">Concierge de Licenciamento ANVISA</h3>
-                  <p className="text-[10px] text-slate-500">Digite um produto do Cap. 33 ou NCM para ver as exigências</p>
-                </div>
+          {/* LEFT: single tabbed panel */}
+          <aside className="lg:sticky lg:top-24 lg:col-span-4" id="sidebar-tabs-panel">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+
+              {/* Tab bar */}
+              <div className="flex gap-1 border-b border-slate-200 bg-slate-50/70 p-1.5">
+                {([
+                  { key: 'upload', label: 'Upload', icon: <Upload className="h-3.5 w-3.5" /> },
+                  { key: 'audio', label: 'Áudio', icon: <Phone className="h-3.5 w-3.5" /> },
+                  { key: 'ncm', label: 'Consulta NCM', icon: <Search className="h-3.5 w-3.5" /> },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setSidebarTab(tab.key)}
+                    className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${
+                      sidebarTab === tab.key
+                        ? 'border border-slate-200 bg-white text-indigo-700 shadow-sm'
+                        : 'border border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
               </div>
 
-              {/* Two Column Layout inside Concierge */}
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-12">
-                
-                {/* Search query panel (left column) */}
-                <div className="sm:col-span-5 space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Produto ou NCM:</label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => handleConciergeSearch(e.target.value)}
-                      placeholder="Ex: shampoo, batom, 3304"
-                      className="w-full rounded-md border border-slate-200 pl-8 pr-2 py-1.5 text-xs font-semibold focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
+              <div className="p-4">
 
-                  <div className="space-y-1.5 pt-1">
-                    <span className="text-[9px] font-bold text-slate-400 block uppercase">Sugestões rápidas:</span>
+                {/* TAB 1: Document upload */}
+                {sidebarTab === 'upload' && (
+                  <div className="space-y-4" id="dropzone-workspace">
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`rounded-xl border-2 border-dashed p-6 text-center transition ${
+                        dragOver ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 bg-slate-50/50'
+                      }`}
+                    >
+                      <Upload className="mx-auto mb-2 h-8 w-8 stroke-1 text-indigo-400" />
+                      <p className="text-sm font-semibold text-slate-700">Arraste sua Invoice ou BL aqui</p>
+                      <p className="mt-0.5 text-xs text-slate-400">PDF, PNG, XML ou TXT</p>
+
+                      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                        <button
+                          onClick={() => handleSimulateLocalFile('INVOICE_AMOUR_88402.pdf', 0)}
+                          className="rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[10px] font-medium text-slate-500 transition hover:border-indigo-200 hover:text-indigo-700"
+                        >
+                          Amour Cosmetics.pdf
+                        </button>
+                        <button
+                          onClick={() => handleSimulateLocalFile('INVOICE_SUMMIT_STANLEY.pdf', 1)}
+                          className="rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[10px] font-medium text-slate-500 transition hover:border-indigo-200 hover:text-indigo-700"
+                        >
+                          Stanley Cups.pdf
+                        </button>
+                      </div>
+
+                      {draggedFile && (
+                        <div className="mt-3 inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-mono text-[11px] font-medium text-emerald-800">
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          <span>Ativo: {draggedFile}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Ou cole o texto da Invoice:</span>
+                      <textarea
+                        value={invoiceText}
+                        onChange={(e) => setInvoiceText(e.target.value)}
+                        placeholder="Cole aqui o texto comercial para extrair NCMs via IA..."
+                        className="h-20 w-full rounded-lg border border-slate-200 p-2.5 font-mono text-xs focus:border-indigo-500 focus:outline-none"
+                      />
+
+                      {errorMsg && (
+                        <div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+                          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" />
+                          <span>{errorMsg}</span>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleAnalyzeCustomInvoice}
+                        disabled={isLoading}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            Extraindo dados...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Analisar via ComexPilot AI
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: WhatsApp voice simulator */}
+                {sidebarTab === 'audio' && (
+                  <div className="space-y-3" id="voice-whatsapp-integration">
+                    <div className="space-y-1.5">
+                      <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-400">Áudio do despachante:</span>
+                      <select
+                        value={selectedAudioPreset}
+                        onChange={(e: any) => {
+                          setSelectedAudioPreset(e.target.value);
+                          setAudioTranscription('');
+                          setAudioVerdict('');
+                        }}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium focus:border-indigo-500 focus:outline-none"
+                      >
+                        <option value="comex_audio_1">Áudio #1 — Cosmético Aloe Vera (Coreia do Sul)</option>
+                        <option value="comex_audio_2">Áudio #2 — Sabonete de Toucador (França)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                      <button
+                        onClick={triggerVoiceAnalysis}
+                        disabled={isAudioLoading || isAudioPlaying}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isAudioPlaying ? (
+                          <Square className="h-4 w-4 fill-white" />
+                        ) : (
+                          <Play className="ml-0.5 h-4 w-4 fill-white" />
+                        )}
+                      </button>
+
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800">Mensagem de voz</span>
+                          <span className="font-mono text-[10px] text-slate-400">0:14</span>
+                        </div>
+                        <div className="flex h-6 items-center gap-0.5">
+                          {[6, 12, 18, 10, 4, 16, 22, 14, 8, 18, 24, 12, 6, 16, 20, 10, 8, 14, 18, 4, 12, 16, 8, 6, 14].map((h, i) => (
+                            <div
+                              key={i}
+                              style={{ height: isAudioPlaying ? `${h}px` : '4px' }}
+                              className={`w-[3px] rounded-full bg-emerald-500 transition-all duration-150 ${isAudioPlaying ? 'animate-pulse' : ''}`}
+                            ></div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isAudioLoading && (
+                      <div className="flex items-center justify-center gap-1.5 py-2 text-xs text-slate-500">
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                        <span>Transcrevendo e analisando o áudio...</span>
+                      </div>
+                    )}
+
+                    {audioTranscription && (
+                      <div className="space-y-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Transcrição</span>
+                          <p className="italic">"{audioTranscription}"</p>
+                        </div>
+
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs text-slate-700">
+                          <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-700">
+                            <Sparkles className="h-3 w-3" />
+                            Parecer técnico
+                          </span>
+                          <div className="whitespace-pre-line leading-relaxed">{audioVerdict}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: NCM concierge */}
+                {sidebarTab === 'ncm' && (
+                  <div className="space-y-3" id="concierge-widget">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleConciergeSearch(e.target.value)}
+                        placeholder="Ex: shampoo, batom, 3304"
+                        className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-2 text-xs font-medium focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
                     <div className="flex flex-wrap gap-1">
                       {['protetor solar', 'perfumes', 'xampus', 'sombras'].map((tag) => (
                         <button
                           key={tag}
                           onClick={() => handleConciergeSearch(tag)}
-                          className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 text-[10px] hover:bg-indigo-50 hover:text-indigo-700 transition font-semibold"
+                          className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 transition hover:bg-indigo-50 hover:text-indigo-700"
                         >
                           {tag}
                         </button>
                       ))}
                     </div>
-                  </div>
-                </div>
 
-                {/* Instant ANVISA rules highlighted (right column) */}
-                <div className="sm:col-span-7 bg-slate-50 rounded-lg p-3 border border-slate-150 flex flex-col justify-between">
-                  {selectedConciergeItem ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded">
-                          NCM {selectedConciergeItem.ncm}
-                        </span>
-                        <span className="bg-rose-100 text-rose-800 text-[9px] font-bold px-1.5 py-0.2 rounded border border-rose-200">
-                          ANVISA LI Obrigatória
-                        </span>
-                      </div>
-
-                      <h4 className="text-xs font-bold text-slate-800 leading-tight">{selectedConciergeItem.description}</h4>
-                      
-                      <div className="text-[11px] text-slate-600 space-y-1">
-                        <div>
-                          Regra Básica: <span className="font-semibold bg-yellow-100 text-slate-900 px-1 rounded">RDC 752/2022</span> da ANVISA.
+                    {selectedConciergeItem ? (
+                      <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 font-mono text-xs font-semibold text-indigo-700">
+                            NCM {selectedConciergeItem.ncm}
+                          </span>
+                          <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                            LI ANVISA obrigatória
+                          </span>
                         </div>
-                        <div>
-                          Atualização: <span className="font-semibold">{selectedConciergeItem.mainNormative}</span> para procedimentos Siscomex.
+
+                        <h4 className="text-sm font-semibold leading-tight text-slate-800">{selectedConciergeItem.description}</h4>
+
+                        <div className="space-y-1 text-xs text-slate-500">
+                          <p>Regra básica: <span className="font-medium text-slate-700">RDC 752/2022</span> da ANVISA.</p>
+                          <p>Atualização: <span className="font-medium text-slate-700">{selectedConciergeItem.mainNormative}</span>.</p>
+                          <p>Preço ref. valoração: <span className="font-mono font-semibold text-slate-800">${selectedConciergeItem.minPriceUsd.toFixed(2)} FOB/un</span>.</p>
                         </div>
-                        <div>
-                          Preço Ref. Valoração: <span className="font-mono font-bold text-slate-900">${selectedConciergeItem.minPriceUsd.toFixed(2)} FOB / un</span>.
+
+                        <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                          <a
+                            href={selectedConciergeItem.normativeLink}
+                            target="_blank"
+                            referrerPolicy="no-referrer"
+                            className="text-[11px] font-semibold text-indigo-600 hover:underline"
+                          >
+                            Normativa ANVISA ↗
+                          </a>
+                          <span className="font-mono text-[10px] text-slate-400">Controle ativo</span>
                         </div>
                       </div>
-
-                      <div className="pt-1.5 border-t border-slate-200 flex items-center justify-between">
-                        <a 
-                          href={selectedConciergeItem.normativeLink}
-                          target="_blank"
-                          referrerPolicy="no-referrer"
-                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 hover:underline"
-                        >
-                          Normativa ANVISA Legislis ↗
-                        </a>
-                        <span className="text-[9px] text-slate-400 font-mono">Controle Ativo</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-slate-400 text-xs">
-                      <p>Nenhuma regra de cosméticos selecionada.</p>
-                      <p className="text-[10px] mt-1">Busque acima por NCM ou descrição.</p>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-
-            {/* 2. WHATSAPP AUDIO / VOICE CHANNEL VERDICT */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs" id="voice-whatsapp-integration">
-              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-3">
-                <div className="h-7 w-7 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-800 font-display">Canal Integrado de Áudio WhatsApp</h3>
-                  <p className="text-[10px] text-slate-500">Simule o envio de mensagens de voz e gere laudos instantâneos</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-150">
-                  <span className="text-3xs font-bold text-slate-400 uppercase block tracking-wider">Selecione o áudio do despachante:</span>
-                  <select
-                    value={selectedAudioPreset}
-                    onChange={(e: any) => {
-                      setSelectedAudioPreset(e.target.value);
-                      setAudioTranscription('');
-                      setAudioVerdict('');
-                    }}
-                    className="bg-white text-xs font-semibold rounded border border-slate-200 px-1.5 py-0.5 focus:outline-none"
-                  >
-                    <option value="comex_audio_1">Áudio #1 - Cosmético Aloe Vera (Coreia do Sul)</option>
-                    <option value="comex_audio_2">Áudio #2 - Sabonete de Toucador (França)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-3 bg-emerald-50/50 rounded-xl p-3 border border-emerald-100">
-                  <button
-                    onClick={triggerVoiceAnalysis}
-                    disabled={isAudioLoading || isAudioPlaying}
-                    className="h-10 w-10 shrink-0 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-sm disabled:opacity-50 transition"
-                  >
-                    {isAudioPlaying ? (
-                      <Square className="w-4 h-4 fill-white" />
                     ) : (
-                      <Play className="w-4 h-4 fill-white ml-0.5" />
+                      <div className="py-6 text-center text-xs text-slate-400">
+                        <p>Nenhuma regra selecionada.</p>
+                        <p className="mt-1 text-[11px]">Busque acima por NCM ou descrição.</p>
+                      </div>
                     )}
-                  </button>
-
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-3xs font-bold text-emerald-800 uppercase">Mensagem de Voz Recebida</span>
-                      <span className="text-3xs font-mono text-slate-400">0:14 s</span>
-                    </div>
-
-                    {/* Realistic moving audio wave */}
-                    <div className="flex items-center space-x-0.5 h-6">
-                      {[6, 12, 18, 10, 4, 16, 22, 14, 8, 18, 24, 12, 6, 16, 20, 10, 8, 14, 18, 4, 12, 16, 8, 6, 14].map((h, i) => (
-                        <div
-                          key={i}
-                          style={{ height: isAudioPlaying ? `${h}px` : '4px' }}
-                          className={`w-[3px] rounded-full bg-emerald-500 transition-all duration-150 ${isAudioPlaying ? 'animate-pulse' : ''}`}
-                        ></div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {isAudioLoading && (
-                  <div className="text-center py-2 text-xs text-slate-500 flex items-center justify-center gap-1.5">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                    <span>Processando áudio com Whisper & analisando com Gemini...</span>
                   </div>
                 )}
 
-                {audioTranscription && (
-                  <div className="space-y-2">
-                    <div className="rounded-xl bg-slate-100 p-3 text-xs text-slate-700 border border-slate-200">
-                      <strong className="text-3xs font-bold text-slate-400 uppercase block tracking-wider mb-1">Transcrição do Áudio:</strong>
-                      <p className="italic">"{audioTranscription}"</p>
-                    </div>
-
-                    <div className="rounded-xl bg-indigo-50 p-3 text-xs text-slate-800 border border-indigo-100 space-y-1">
-                      <strong className="text-3xs font-bold text-indigo-700 uppercase block tracking-wider mb-1 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-indigo-500" />
-                        Parecer Técnico Aduaneiro do ComexPilot:
-                      </strong>
-                      <div className="whitespace-pre-line text-[11px] leading-relaxed font-sans">{audioVerdict}</div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
+          </aside>
 
-            {/* 3. DOCUMENT DROPZONE & SCENARIO CARRIER */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs" id="dropzone-workspace">
-              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-3">
-                <div className="h-7 w-7 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <Upload className="w-4 h-4" />
-                </div>
+          {/* RIGHT: wide audit feed */}
+          <section className="space-y-6 lg:col-span-8">
+
+            {/* A. Prioritized cargo feed */}
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" id="prioritized-cargo-feed">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-5 py-3.5">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-800 font-display">Simulador Dropzone de Documentos</h3>
-                  <p className="text-[10px] text-slate-500">Arraste documentos aduaneiros (Invoice / BL) para análise</p>
-                </div>
-              </div>
-
-              {/* Drag Area */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition ${
-                  dragOver ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 bg-slate-50/50'
-                }`}
-              >
-                <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2 stroke-1" />
-                <p className="text-xs font-bold text-slate-700">Arraste sua Invoice ou BL aqui</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Suporta formatos PDF, PNG, XML ou TXT</p>
-                
-                <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                  <button
-                    onClick={() => handleSimulateLocalFile('INVOICE_AMOUR_88402.pdf', 0)}
-                    className="bg-white text-slate-600 rounded border border-slate-200 px-2 py-0.5 text-4xs font-bold font-mono hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition"
-                  >
-                    Simular Amour Cosmetics.pdf
-                  </button>
-                  <button
-                    onClick={() => handleSimulateLocalFile('INVOICE_SUMMIT_STANLEY.pdf', 1)}
-                    className="bg-white text-slate-600 rounded border border-slate-200 px-2 py-0.5 text-4xs font-bold font-mono hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition"
-                  >
-                    Simular Stanley Cups.pdf
-                  </button>
-                </div>
-
-                {draggedFile && (
-                  <div className="mt-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded px-2.5 py-1 text-3xs font-bold font-mono inline-flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Ativo: {draggedFile}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Manual Custom Text Analysis */}
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Inserir Texto Adicional Manualmente:</span>
-                <textarea
-                  value={invoiceText}
-                  onChange={(e) => setInvoiceText(e.target.value)}
-                  placeholder="Se preferir, cole o texto da Invoice aqui para extrair NCMs e analisar via IA..."
-                  className="w-full h-20 rounded-md border border-slate-200 p-2 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                />
-                
-                {errorMsg && (
-                  <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-3xs text-rose-700 flex items-start gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                    <span>{errorMsg}</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleAnalyzeCustomInvoice}
-                  disabled={isLoading}
-                  className="w-full rounded-lg bg-indigo-600 text-white font-bold text-xs py-2 shadow hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-1"
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Extraindo Dados do Texto...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Analisar Texto via ComexPilot AI ⚡
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* RIGHT PANELS: prioritized alerts feed and prefilled active analysis */}
-          <div className="lg:col-span-7 space-y-6">
-
-            {/* A. PRIORITIZED CARGO FEED (FILA DE PRIORIDADES) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden" id="prioritized-cargo-feed">
-              <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 font-display uppercase tracking-wider flex items-center gap-1">
-                    <Activity className="w-4 h-4 text-rose-600" />
-                    Fila de Triagem Preventiva (Cargos Ativos)
+                  <h3 className="flex items-center gap-1.5 font-display text-sm font-semibold text-slate-900">
+                    <Activity className="h-4 w-4 text-rose-500" />
+                    Fila de Triagem Preventiva
                   </h3>
-                  <p className="text-[10px] text-slate-500">Fluxos organizados por severidade e exposição financeira</p>
+                  <p className="text-xs text-slate-400">Cargas ordenadas por severidade e exposição financeira</p>
                 </div>
-                <span className="text-3xs font-mono text-slate-500 bg-white border border-slate-200 rounded px-2 py-0.5">
-                  Preços Híbridos Ativos
+                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-mono text-[10px] text-slate-400">
+                  {CARGO_LOTS_FEED.length} lotes ativos
                 </span>
               </div>
 
-              <div className="divide-y divide-slate-150">
+              <div className="divide-y divide-slate-100">
                 {CARGO_LOTS_FEED.map((cargo) => {
                   const isHighRisk = cargo.riskClass === 'high';
                   const isMediumRisk = cargo.riskClass === 'medium';
-                  
+
                   return (
-                    <div key={cargo.id} className="p-4 hover:bg-slate-50/40 transition">
-                      
-                      {/* Cargo identity row */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-base">{cargo.flag}</span>
+                    <div key={cargo.id} className="p-5 transition hover:bg-slate-50/40">
+
+                      {/* Lot identity */}
+                      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-lg">{cargo.flag}</span>
                           <div>
-                            <span className="font-bold text-xs text-slate-900 block leading-tight">{cargo.name}</span>
-                            <span className="text-4xs font-mono text-slate-400 block uppercase">Container ID: {cargo.containerId}</span>
+                            <span className="block text-sm font-semibold leading-tight text-slate-900">{cargo.name}</span>
+                            <span className="block font-mono text-[10px] uppercase text-slate-400">{cargo.containerId} · NCM {cargo.ncm}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border uppercase ${
-                            isHighRisk ? 'bg-rose-100 text-rose-800 border-rose-200' :
-                            isMediumRisk ? 'bg-amber-100 text-amber-800 border-amber-200' :
-                            'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            isHighRisk ? 'border-rose-200 bg-rose-50 text-rose-700' :
+                            isMediumRisk ? 'border-amber-200 bg-amber-50 text-amber-700' :
+                            'border-emerald-200 bg-emerald-50 text-emerald-700'
                           }`}>
                             {isHighRisk ? 'Risco Crítico' : isMediumRisk ? 'Atenção' : 'Conforme'}
                           </span>
-
-                          <span className={`text-3xs font-mono font-bold ${cargo.financialRiskValue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {cargo.financialRiskValue > 0 
-                              ? `Risco: R$ ${cargo.financialRiskValue.toLocaleString('pt-BR')}` 
-                              : `Otimização: R$ ${Math.abs(cargo.financialRiskValue).toLocaleString('pt-BR')}`
+                          <span className={`font-mono text-xs font-semibold ${cargo.financialRiskValue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {cargo.financialRiskValue > 0
+                              ? `Risco R$ ${cargo.financialRiskValue.toLocaleString('pt-BR')}`
+                              : `Ganho R$ ${Math.abs(cargo.financialRiskValue).toLocaleString('pt-BR')}`
                             }
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-2xs text-slate-600 mb-2.5 font-semibold bg-slate-50 p-1.5 rounded border border-slate-100 flex items-center justify-between">
-                        <span>Produto: {cargo.product}</span>
-                        <span className="font-mono bg-white px-1 border rounded text-slate-500 text-3xs shrink-0 select-all ml-1">NCM {cargo.ncm}</span>
-                      </div>
+                      <p className="mb-3 text-sm text-slate-500">{cargo.product}</p>
 
-                      {/* Cargo warnings inner feed */}
-                      <div className="space-y-2">
+                      {/* Alerts */}
+                      <div className="space-y-2.5">
                         {cargo.alerts.map((alert) => (
-                          <div key={alert.id} className="bg-white rounded-lg border border-slate-200 p-2.5 space-y-1.5 shadow-3xs">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-start space-x-1.5">
+                          <div key={alert.id} className="rounded-lg border border-slate-200 bg-white p-3.5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-2">
                                 <span className="mt-0.5 shrink-0">
                                   {alert.severity === 'red' ? (
-                                    <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+                                    <ShieldAlert className="h-4 w-4 text-rose-500" />
                                   ) : alert.severity === 'yellow' ? (
-                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                    <AlertTriangle className="h-4 w-4 text-amber-500" />
                                   ) : (
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                                    <TrendingUp className="h-4 w-4 text-emerald-500" />
                                   )}
                                 </span>
-                                <strong className="text-3xs font-bold text-slate-800 leading-tight block">{alert.title}</strong>
+                                <p className="text-sm font-semibold leading-snug text-slate-800">{alert.title}</p>
                               </div>
-                              <span className={`text-[8px] font-bold uppercase tracking-wider font-mono px-1 rounded ${
-                                alert.severity === 'red' ? 'bg-rose-50 text-rose-700' :
-                                alert.severity === 'yellow' ? 'bg-amber-50 text-amber-700' :
-                                'bg-emerald-50 text-emerald-700'
+                              <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider ${
+                                alert.severity === 'red' ? 'bg-rose-50 text-rose-600' :
+                                alert.severity === 'yellow' ? 'bg-amber-50 text-amber-600' :
+                                'bg-emerald-50 text-emerald-600'
                               }`}>
                                 {alert.severity === 'red' ? 'Bloqueio' : alert.severity === 'yellow' ? 'Atenção' : 'Oportunidade'}
                               </span>
                             </div>
 
-                            <p className="text-3xs text-slate-500 leading-relaxed pl-5">"{alert.desc}"</p>
-                            
-                            <div className="bg-slate-50 p-1.5 rounded text-4xs font-mono text-slate-400 pl-5">
-                              <strong>Base Legal:</strong> {alert.legal}
-                            </div>
+                            <p className="mt-2 pl-6 text-sm leading-relaxed text-slate-500">{alert.desc}</p>
+                            <p className="mt-1.5 pl-6 text-xs text-slate-400">Base legal: {alert.legal}</p>
 
-                            <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pl-5">
-                              <span className="text-3xs text-slate-600 font-bold italic">
-                                👉 {alert.action}
-                              </span>
-
+                            <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 pl-6 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="text-xs leading-relaxed text-slate-500">{alert.action}</span>
                               {alert.type === 'LI_ANVISA' && (
                                 <button
                                   onClick={() => openLiMinutaForCargo(cargo)}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-2 py-0.8 rounded shadow-sm hover:scale-[1.02] active:scale-[0.98] transition flex items-center gap-1 shrink-0 self-end sm:self-auto"
+                                  className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 sm:self-auto"
                                 >
-                                  <Sparkles className="w-3 h-3" />
+                                  <Sparkles className="h-3.5 w-3.5" />
                                   Gerar Minuta de LI Automatizada
                                 </button>
                               )}
@@ -1458,89 +1372,79 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
               </div>
             </div>
 
-            {/* B. DETAILED AUDIT FOR CURRENT ACTIVE SCENARIO */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden" id="second-page-panel">
-              
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            {/* B. Active scenario audit */}
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" id="second-page-panel">
+
+              <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/70 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-display flex items-center gap-1">
-                    <Scale className="w-4 h-4 text-indigo-600" />
-                    Segunda Página de Alertas do Fiscal ({activeScenario.fileName})
+                  <h3 className="flex items-center gap-1.5 font-display text-sm font-semibold text-slate-900">
+                    <Scale className="h-4 w-4 text-indigo-600" />
+                    Auditoria do Arquivo Ativo
                   </h3>
-                  <p className="text-3xs text-slate-500">Auditoria do arquivo ativo carregado no simulador aduaneiro</p>
+                  <p className="font-mono text-xs text-slate-400">{activeScenario.fileName}</p>
                 </div>
 
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setActiveTab('all')}
-                    className={`rounded px-2 py-0.5 text-3xs font-bold transition ${activeTab === 'all' ? 'bg-indigo-600 text-white' : 'bg-white border text-slate-600'}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${activeTab === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border border-slate-200'}`}
                   >
                     Todos ({activeScenario.alerts.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('red')}
-                    className={`rounded px-2 py-0.5 text-3xs font-bold transition flex items-center gap-0.5 ${activeTab === 'red' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${activeTab === 'red' ? 'bg-rose-600 text-white' : 'border border-rose-100 bg-rose-50 text-rose-600'}`}
                   >
-                    🔴 ({redAlertsCount})
+                    Críticos ({redAlertsCount})
                   </button>
                   <button
                     onClick={() => setActiveTab('yellow')}
-                    className={`rounded px-2 py-0.5 text-3xs font-bold transition flex items-center gap-0.5 ${activeTab === 'yellow' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${activeTab === 'yellow' ? 'bg-amber-500 text-white' : 'border border-amber-100 bg-amber-50 text-amber-600'}`}
                   >
-                    🟡 ({yellowAlertsCount})
+                    Atenção ({yellowAlertsCount})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('green')}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${activeTab === 'green' ? 'bg-emerald-600 text-white' : 'border border-emerald-100 bg-emerald-50 text-emerald-600'}`}
+                  >
+                    Ganhos ({greenAlertsCount})
                   </button>
                 </div>
               </div>
 
-              <div className="p-4 space-y-3">
+              <div className="space-y-3 p-5">
                 {filteredAlerts.length === 0 ? (
-                  <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                    <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-1 stroke-1" />
-                    <p className="text-xs font-bold text-slate-700">Tudo em conformidade!</p>
-                    <p className="text-3xs text-slate-400">Nenhum erro de parametrização aduaneira ou regulatória encontrado.</p>
+                  <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-8 text-center">
+                    <CheckCircle className="mx-auto mb-1 h-8 w-8 stroke-1 text-emerald-500" />
+                    <p className="text-sm font-semibold text-slate-700">Tudo em conformidade</p>
+                    <p className="text-xs text-slate-400">Nenhuma divergência regulatória encontrada.</p>
                   </div>
                 ) : (
                   filteredAlerts.map((alert) => {
                     const styles = getSeverityStyles(alert.severity);
                     return (
-                      <div key={alert.id} className={`rounded-xl border p-3.5 transition ${styles.bg} ${styles.border}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start space-x-2">
+                      <div key={alert.id} className={`rounded-xl border p-4 transition ${styles.bg} ${styles.border}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2">
                             <div className="mt-0.5 shrink-0">{styles.icon}</div>
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-900 leading-snug">{alert.title}</h4>
-                              {alert.affectedItems && (
-                                <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px] font-mono text-slate-500">
-                                  <span>Mercadoria(s):</span>
-                                  {alert.affectedItems.map((item, i) => (
-                                    <span key={i} className="bg-white border rounded px-1 max-w-xs truncate">{item}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <h4 className="text-sm font-semibold leading-snug text-slate-900">{alert.title}</h4>
                           </div>
-                          <span className={`rounded px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase shrink-0 ${styles.badge}`}>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase ${styles.badge}`}>
                             {styles.label}
                           </span>
                         </div>
 
-                        <div className="mt-3 space-y-2 text-3xs border-t border-slate-200/50 pt-2.5">
-                          <p className="text-slate-600 leading-relaxed text-2xs">{alert.description}</p>
-                          
-                          <div className="rounded bg-white p-2 border border-slate-150">
-                            <span className="font-bold text-slate-700 uppercase block tracking-wider text-[9px]">Base Legal / Fundamento Regulador:</span>
-                            <p className="text-slate-600 mt-0.5 font-mono">{alert.baseLegal}</p>
-                          </div>
-
-                          <div className="rounded bg-white p-2 border border-slate-150">
-                            <span className="font-bold text-rose-800 uppercase block tracking-wider text-[9px]">Impacto Financeiro Estimado:</span>
-                            <p className="text-slate-700 mt-0.5">{alert.impactoFinanceiro}</p>
-                          </div>
-
-                          <div className="rounded bg-indigo-50/50 p-2 border border-indigo-100">
-                            <span className="font-bold text-indigo-900 uppercase block tracking-wider text-[9px]">Plano de Ação e Tratamento:</span>
-                            <p className="text-indigo-950 font-bold mt-0.5">{alert.planoAcao}</p>
-                          </div>
+                        <div className="mt-3 space-y-1.5 border-t border-slate-200/60 pt-3">
+                          <p className="text-sm leading-relaxed text-slate-500">{alert.description}</p>
+                          <p className="text-xs leading-relaxed text-slate-400">
+                            <span className="font-medium text-slate-500">Base legal:</span> {alert.baseLegal}
+                          </p>
+                          <p className="text-xs leading-relaxed text-slate-500">
+                            <span className="font-medium text-rose-600">Impacto:</span> {alert.impactoFinanceiro}
+                          </p>
+                          <p className="text-xs leading-relaxed text-slate-600">
+                            <span className="font-medium text-indigo-600">Plano de ação:</span> {alert.planoAcao}
+                          </p>
                         </div>
                       </div>
                     );
@@ -1548,42 +1452,39 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
                 )}
               </div>
 
-              {/* Items data table */}
+              {/* Items table */}
               <div className="border-t border-slate-200">
-                <div className="bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 border-b border-slate-150">
-                  Lista Detalhada de Itens Declarados na Fatura
+                <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-2.5 text-xs font-semibold text-slate-600">
+                  Itens declarados na fatura
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-3xs">
+                  <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-150 font-bold uppercase text-slate-400 tracking-wider">
-                        <th className="px-3 py-2">Item / Descrição</th>
-                        <th className="px-3 py-2">Código NCM</th>
-                        <th className="px-3 py-2 text-right">Preço Unit.</th>
-                        <th className="px-3 py-2 text-center">Qtd.</th>
-                        <th className="px-3 py-2 text-right">Valor FOB</th>
-                        <th className="px-3 py-2">Ação</th>
+                      <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <th className="px-4 py-2">Descrição</th>
+                        <th className="px-4 py-2">NCM</th>
+                        <th className="px-4 py-2 text-right">Preço Unit.</th>
+                        <th className="px-4 py-2 text-center">Qtd.</th>
+                        <th className="px-4 py-2 text-right">Valor FOB</th>
+                        <th className="px-4 py-2"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-150">
+                    <tbody className="divide-y divide-slate-100">
                       {activeScenario.items.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 font-bold text-slate-800">
-                            <div>{item.description}</div>
-                            {item.additionalDetails && <div className="text-[9px] text-slate-400 font-mono italic mt-0.5">{item.additionalDetails}</div>}
+                        <tr key={item.id} className="hover:bg-slate-50/60">
+                          <td className="px-4 py-2.5 font-medium text-slate-700">{item.description}</td>
+                          <td className="px-4 py-2.5">
+                            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono">{item.ncm}</span>
                           </td>
-                          <td className="px-3 py-2">
-                            <span className="font-mono bg-slate-100 border border-slate-200 rounded px-1.5 py-0.2">{item.ncm}</span>
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono font-semibold">${item.unitPrice.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-center font-mono">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right font-mono font-bold text-indigo-900">${item.totalPrice.toFixed(2)}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-4 py-2.5 text-right font-mono">${item.unitPrice.toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-center font-mono">{item.quantity}</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">${item.totalPrice.toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-right">
                             <button
                               onClick={() => openLiMinutaForActiveItem(item)}
-                              className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+                              className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
                             >
-                              Fazer Minuta
+                              Gerar Minuta
                             </button>
                           </td>
                         </tr>
@@ -1595,78 +1496,75 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
 
             </div>
 
-          </div>
+          </section>
 
         </div>
 
       </main>
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-200 bg-white py-6 mt-12 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400" id="app-footer">
-        <div className="mx-auto max-w-7xl">
-          <p className="font-semibold text-slate-500 font-display">ComexPilot AI • Inteligência Aduaneira em Comércio Exterior Brasileiro</p>
-          <p className="text-3xs text-slate-400 font-mono mt-1">Conformidade e Triagem Preventiva • IN RFB 1986/2020 • RDC ANVISA 752/2022 • CAMEX • GECEX 227/2021</p>
+      {/* Footer */}
+      <footer className="mt-12 border-t border-slate-200 bg-white px-4 py-6 text-center sm:px-6 lg:px-8" id="app-footer">
+        <div className="mx-auto max-w-[1440px]">
+          <p className="font-display text-xs font-medium text-slate-500">ComexPilot AI · Inteligência Aduaneira em Comércio Exterior</p>
+          <p className="mt-1 font-mono text-[10px] text-slate-400">IN RFB 1986/2020 · RDC ANVISA 752/2022 · GECEX 227/2021</p>
         </div>
       </footer>
 
-      {/* SLIDE-OVER / MODAL: SISCOMEX LI MINUTA AUTODEFERIDA */}
+      {/* SLIDE-OVER MODAL: SISCOMEX LI MINUTA */}
       {isLiModalOpen && liPrefilledData && (
         <div className="fixed inset-0 z-50 overflow-hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="absolute inset-0 overflow-hidden">
-            
-            {/* Dark overlay backdrop */}
-            <div 
+
+            <div
               onClick={() => setIsLiModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"
             ></div>
 
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
-              
-              {/* Modal Container */}
-              <div className="pointer-events-auto w-screen max-w-md transform transition-all duration-300 ease-in-out bg-white shadow-2xl flex flex-col justify-between">
-                
+
+              <div className="pointer-events-auto flex w-screen max-w-md transform flex-col justify-between bg-white shadow-2xl transition-all duration-300 ease-in-out">
+
                 {/* Header */}
-                <div className="px-4 py-5 bg-indigo-600 text-white sm:px-6 flex items-center justify-between">
+                <div className="flex items-center justify-between bg-indigo-600 px-4 py-5 text-white sm:px-6">
                   <div className="space-y-1">
-                    <h2 className="text-sm font-bold uppercase tracking-wider font-display flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" />
-                      Mesa de LI Automatizada (Siscomex)
+                    <h2 className="flex items-center gap-1.5 font-display text-sm font-semibold uppercase tracking-wider">
+                      <Sparkles className="h-4 w-4" />
+                      Mesa de LI Automatizada
                     </h2>
-                    <p className="text-3xs text-indigo-100 font-sans">Ajuste técnico preventivo de Licença de Importação ANVISA</p>
+                    <p className="text-xs text-indigo-100">Ajuste preventivo de Licença de Importação ANVISA</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIsLiModalOpen(false)}
-                    className="rounded-md text-indigo-200 hover:text-white hover:bg-indigo-700/50 p-1.5 transition"
+                    className="rounded-md p-1.5 text-indigo-200 transition hover:bg-indigo-700/50 hover:text-white"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 
-                {/* Main Body */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
-                  
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-3xs text-amber-900 leading-relaxed flex gap-2">
-                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+                {/* Body */}
+                <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+
+                  <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                    <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600" />
                     <div>
-                      <strong>Aviso Regulatório:</strong> O deferimento adiantado no Siscomex requer exatidão absoluta nos campos descritivos para que os robôs da ANVISA cruzem dados de rotulagem sem interrupções manuais.
+                      <strong>Aviso regulatório:</strong> o deferimento adiantado no Siscomex requer exatidão nos campos descritivos para o cruzamento automático de dados pela ANVISA.
                     </div>
                   </div>
 
-                  {/* Form fields */}
                   <div className="space-y-3 text-xs">
-                    
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-3xs font-bold uppercase text-slate-400 block mb-1">NCM do Item:</label>
+                        <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-400">NCM do Item</label>
                         <input
                           type="text"
                           value={liPrefilledData.ncm}
                           onChange={(e) => setLiPrefilledData({ ...liPrefilledData, ncm: e.target.value })}
-                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-mono font-semibold"
+                          className="w-full rounded border border-slate-200 px-2 py-1.5 font-mono text-xs font-semibold"
                         />
                       </div>
                       <div>
-                        <label className="text-3xs font-bold uppercase text-slate-400 block mb-1">Origem / Fabricação:</label>
+                        <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-400">Origem / Fabricação</label>
                         <input
                           type="text"
                           value={liPrefilledData.origin}
@@ -1677,77 +1575,75 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
                     </div>
 
                     <div>
-                      <label className="text-3xs font-bold uppercase text-slate-400 block mb-1">Descrição Comercial Aduaneira (Completa):</label>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-400">Descrição Comercial Aduaneira</label>
                       <textarea
                         value={liPrefilledData.description}
                         onChange={(e) => setLiPrefilledData({ ...liPrefilledData, description: e.target.value })}
-                        className="w-full rounded border border-slate-200 p-2 text-xs font-semibold h-16 leading-tight focus:outline-none focus:border-indigo-500"
+                        className="h-16 w-full rounded border border-slate-200 p-2 text-xs font-semibold leading-tight focus:border-indigo-500 focus:outline-none"
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-3xs font-mono bg-slate-50 p-2 rounded border border-slate-150">
-                      <div>Qtd: <span className="font-bold text-slate-800">{liPrefilledData.quantity}</span></div>
-                      <div>Preço: <span className="font-bold text-slate-800">${liPrefilledData.unitPrice.toFixed(2)}</span></div>
-                      <div>Total FOB: <span className="font-bold text-slate-900">${liPrefilledData.totalPrice.toFixed(2)}</span></div>
+                    <div className="grid grid-cols-3 gap-2 rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px]">
+                      <div>Qtd: <span className="font-semibold text-slate-800">{liPrefilledData.quantity}</span></div>
+                      <div>Preço: <span className="font-semibold text-slate-800">${liPrefilledData.unitPrice.toFixed(2)}</span></div>
+                      <div>FOB: <span className="font-semibold text-slate-900">${liPrefilledData.totalPrice.toFixed(2)}</span></div>
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-slate-150">
+                    <div className="space-y-2 border-t border-slate-200 pt-2">
                       <div>
-                        <label className="text-3xs font-bold uppercase text-slate-400 block mb-1">Razão Social do Exportador:</label>
+                        <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-400">Razão Social do Exportador</label>
                         <input
                           type="text"
                           value={liExporterName}
                           onChange={(e) => setLiExporterName(e.target.value)}
-                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-semibold focus:border-indigo-500 focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="text-3xs font-bold uppercase text-slate-400 block mb-1">Fabricante de Origem:</label>
+                        <label className="mb-1 block text-[10px] font-semibold uppercase text-slate-400">Fabricante de Origem</label>
                         <input
                           type="text"
                           value={liManufacturerName}
                           onChange={(e) => setLiManufacturerName(e.target.value)}
-                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-semibold focus:border-indigo-500 focus:outline-none"
                         />
                       </div>
                     </div>
 
-                    {/* CPF DIGITAL SIGNATURE SECTION */}
-                    <div className="pt-3 border-t border-slate-150 space-y-2">
+                    {/* CPF digital signature */}
+                    <div className="space-y-2 border-t border-slate-200 pt-3">
                       <div className="flex items-center justify-between">
-                        <label className="text-3xs font-bold uppercase text-slate-400 block">Assinatura Digital ICP-Brasil (Ajudante Aduaneiro):</label>
+                        <label className="block text-[10px] font-semibold uppercase text-slate-400">Assinatura Digital ICP-Brasil</label>
                         <button
                           type="button"
                           onClick={() => setIsSignedWithCpf(!isSignedWithCpf)}
-                          className={`rounded px-2 py-0.5 text-3xs font-bold uppercase ${
+                          className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             isSignedWithCpf ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
                           }`}
                         >
-                          {isSignedWithCpf ? 'VINCULADO' : 'INSERIR ASSINATURA'}
+                          {isSignedWithCpf ? 'Vinculado' : 'Inserir assinatura'}
                         </button>
                       </div>
 
                       {isSignedWithCpf && (
-                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-2.5 space-y-1.5 animate-fadeIn">
-                          <div className="flex items-center space-x-2">
-                            <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <div className="space-y-1.5 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2.5">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                             <input
                               type="text"
                               value={cpfNumber}
                               onChange={(e) => setCpfNumber(e.target.value)}
                               placeholder="000.000.000-00"
-                              className="bg-white border border-emerald-200 rounded px-1.5 py-0.5 text-xs font-mono font-bold w-full text-slate-800 focus:outline-none focus:border-emerald-500"
+                              className="w-full rounded border border-emerald-200 bg-white px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none"
                             />
                           </div>
 
                           {cpfError && (
-                            <span className="text-4xs text-rose-600 block font-bold font-sans">
-                              ⚠️ {cpfError}
-                            </span>
+                            <span className="block text-[11px] font-semibold text-rose-600">{cpfError}</span>
                           )}
 
-                          <div className="text-[10px] text-emerald-800 leading-tight">
-                            ✓ Token E-CPF ativo. O XML e o Termo gerados serão assinados eletronicamente sob a cadeia legal ICP-Brasil.
+                          <div className="text-[11px] leading-tight text-emerald-800">
+                            Token E-CPF ativo. O XML e o Termo serão assinados sob a cadeia legal ICP-Brasil.
                           </div>
                         </div>
                       )}
@@ -1757,22 +1653,22 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
 
                 </div>
 
-                {/* Footer and Export Buttons */}
-                <div className="px-4 py-4 bg-slate-50 border-t border-slate-150 sm:px-6 space-y-2 shrink-0">
+                {/* Footer actions */}
+                <div className="shrink-0 space-y-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={handleExportXml}
                       disabled={isExporting}
-                      className="rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-1"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50"
                     >
                       {isExporting ? (
                         <>
-                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <RefreshCw className="h-3 w-3 animate-spin" />
                           Construindo...
                         </>
                       ) : (
                         <>
-                          <FileCode className="w-3.5 h-3.5" />
+                          <FileCode className="h-3.5 w-3.5" />
                           Baixar XML Siscomex
                         </>
                       )}
@@ -1781,24 +1677,24 @@ Este termo é integrado digitalmente ao dossiê de Licença de Importação do S
                     <button
                       onClick={handleExportTermoResponsabilidade}
                       disabled={isExporting}
-                      className="rounded bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-1"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-900 disabled:opacity-50"
                     >
                       {isExporting ? (
                         <>
-                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <RefreshCw className="h-3 w-3 animate-spin" />
                           Gerando...
                         </>
                       ) : (
                         <>
-                          <Download className="w-3.5 h-3.5" />
+                          <Download className="h-3.5 w-3.5" />
                           Termo ANVISA .TXT
                         </>
                       )}
                     </button>
                   </div>
-                  
-                  <span className="text-[9px] text-slate-400 font-mono text-center block">
-                    Gerado pelo motor ComexPilot AI • Uso preventivo homologado
+
+                  <span className="block text-center font-mono text-[10px] text-slate-400">
+                    Gerado pelo motor ComexPilot AI · Uso preventivo homologado
                   </span>
                 </div>
 
