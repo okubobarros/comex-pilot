@@ -128,8 +128,14 @@ export default function Workspace({ status, analysis, savingsBrl, onGenerateLi, 
   /* ---------- LOADING: esqueleto elegante do veredito ---------- */
   if (status === 'loading') {
     return (
-      <section className="h-full flex-1 overflow-y-auto bg-slate-50" id="workspace-loading">
+      <section className="h-full flex-1 overflow-y-auto bg-slate-100/60" id="workspace-loading">
         <div className="mx-auto max-w-4xl animate-pulse space-y-5 px-6 py-6">
+
+          {/* File tab skeleton */}
+          <div className="flex items-end justify-between">
+            <div className="h-9 w-56 rounded-t-xl border border-b-0 border-slate-200 bg-white"></div>
+            <div className="mb-2 h-3 w-40 rounded bg-slate-200/70"></div>
+          </div>
 
           {/* Header skeleton */}
           <div className="flex items-center justify-between">
@@ -191,8 +197,23 @@ export default function Workspace({ status, analysis, savingsBrl, onGenerateLi, 
   const redCount = analysis.alerts.filter(a => a.severity === 'red').length;
 
   return (
-    <section className="h-full flex-1 overflow-y-auto bg-slate-50" id="workspace-complete">
-      <div className="mx-auto max-w-4xl space-y-5 px-6 py-6">
+    <section className="h-full flex-1 overflow-y-auto bg-slate-100/60" id="workspace-complete">
+      <div className="mx-auto max-w-4xl px-6 py-6">
+
+        {/* Visualizador de Arquivo Ativo: aba do documento + envelope de auditoria */}
+        <div id="active-file-viewer">
+          <div className="flex items-end justify-between">
+            <div className="inline-flex items-center gap-2 rounded-t-xl border border-b-0 border-slate-200 bg-white px-4 py-2.5 text-xs font-medium text-slate-700">
+              <span aria-hidden="true">📄</span>
+              <span className="font-mono">{analysis.fileName}</span>
+              <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-500" title="Documento em auditoria ativa"></span>
+            </div>
+            <span className="pb-2 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              Visualizador de Arquivo Ativo
+            </span>
+          </div>
+
+          <div className="space-y-5 rounded-b-xl rounded-tr-xl border border-slate-200 bg-slate-50/60 p-5">
 
         {/* Verdict header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -373,6 +394,9 @@ export default function Workspace({ status, analysis, savingsBrl, onGenerateLi, 
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
           </div>
         </div>
 

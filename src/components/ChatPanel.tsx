@@ -65,7 +65,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
   };
 
   return (
-    <section className="flex h-full w-[40%] min-w-[380px] shrink-0 flex-col border-r border-slate-200 bg-white" id="chat-panel">
+    <section className="flex h-full w-full flex-col border-r border-slate-200 bg-white" id="chat-panel">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
@@ -222,9 +222,17 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
           </button>
         </div>
 
-        <p className="mt-2 text-center font-mono text-[10px] text-slate-300">
-          IN RFB 1986/2020 · RDC ANVISA 752/2022 · GECEX 227/2021
-        </p>
+        {/* Selos de conformidade enterprise */}
+        <div className="mt-2.5 flex items-center justify-center gap-1.5" id="compliance-badges">
+          {['SOC2 II', 'CCPA', 'ISO 27001', 'GDPR'].map((badge) => (
+            <span
+              key={badge}
+              className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider text-slate-400"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
       </div>
     </section>
   );

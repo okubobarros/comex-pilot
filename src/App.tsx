@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AuditAlert, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, WorkspaceStatus } from './types';
 import { DEFAULT_NCM_RULES, PRESET_SCENARIOS } from './data/mockScenarios';
 import { buildHeuristicAnalysis, computeAlerts, computeSavingsBrl, findRuleForNcm } from './engine/rulesEngine';
@@ -43,6 +44,7 @@ export default function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState<'idle' | 'success' | 'simulated'>('success');
   const [liPrefill, setLiPrefill] = useState<LiPrefillData | null>(null);
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
 
   const msgCounter = useRef(0);
 
@@ -229,17 +231,39 @@ export default function App() {
 
       <NavRail onNewProcess={handleNewProcess} />
 
-      <ChatPanel
-        messages={messages}
-        isBusy={isBusy}
-        thinking={workspaceStatus === 'loading' ? { steps: CHAT_THOUGHTS, index: stepIndex } : null}
-        aiStatus={aiStatus}
-        suggestions={SUGGESTIONS}
-        onSuggestion={handleSuggestion}
-        onSendText={handleSendText}
-        onMic={handleMic}
-        onFile={handleFile}
-      />
+      {/* Coluna do chat com colapso animado: largura controlada aqui, conteúdo com largura mínima fixa para não amassar durante a transição */}
+      <div
+        className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+          isChatCollapsed ? 'w-0 min-w-0' : 'w-[40%] min-w-[380px]'
+        }`}
+        id="chat-column"
+      >
+        <div className="h-full min-w-[380px]">
+          <ChatPanel
+            messages={messages}
+            isBusy={isBusy}
+            thinking={workspaceStatus === 'loading' ? { steps: CHAT_THOUGHTS, index: stepIndex } : null}
+            aiStatus={aiStatus}
+            suggestions={SUGGESTIONS}
+            onSuggestion={handleSuggestion}
+            onSendText={handleSendText}
+            onMic={handleMic}
+            onFile={handleFile}
+          />
+        </div>
+      </div>
+
+      {/* Toggle discreto na divisória chat / workspace */}
+      <div className="relative z-20 w-0">
+        <button
+          onClick={() => setIsChatCollapsed((prev) => !prev)}
+          title={isChatCollapsed ? 'Expandir painel de comando' : 'Recolher painel de comando'}
+          className="absolute top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-md transition hover:text-indigo-600 hover:shadow-lg"
+          id="chat-collapse-toggle"
+        >
+          {isChatCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
+      </div>
 
       <Workspace
         status={workspaceStatus}
