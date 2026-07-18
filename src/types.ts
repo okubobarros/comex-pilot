@@ -41,6 +41,19 @@ export interface InvoiceAnalysis {
 
 export type WorkspaceStatus = 'empty' | 'loading' | 'complete';
 
+export type AppView = 'home' | 'workspace';
+
+export type TaskId =
+  | 'audit'
+  | 'risk'
+  | 'checklist'
+  | 'landedCost'
+  | 'freight'
+  | 'margin'
+  | 'classify'
+  | 'ncm'
+  | 'antidumping';
+
 /** Modo do canvas da direita: auditoria padrão ou skill densa (Landed Cost) */
 export type WorkspaceMode = 'audit' | 'landedCost';
 

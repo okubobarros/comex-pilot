@@ -25,6 +25,9 @@ interface ChatPanelProps {
   thinking: ThinkingState | null;
   aiStatus: 'idle' | 'success' | 'simulated';
   suggestions: SuggestionPill[];
+  /** Intenção ativa controlada pelo App (permite pré-seleção ao abrir uma tarefa na Home) */
+  intent: ChatIntent;
+  onIntentChange: (intent: ChatIntent) => void;
   onSuggestion: (pill: SuggestionPill) => void;
   onSendText: (text: string, intent: ChatIntent) => void;
   onMic: (intent: ChatIntent) => void;
@@ -52,10 +55,9 @@ function renderRich(text: string) {
 
 const WAVE_BARS = [6, 12, 18, 10, 4, 16, 22, 14, 8, 18, 12, 6, 16, 10, 14];
 
-export default function ChatPanel({ messages, isBusy, thinking, aiStatus, suggestions, onSuggestion, onSendText, onMic, onFile }: ChatPanelProps) {
+export default function ChatPanel({ messages, isBusy, thinking, aiStatus, suggestions, intent, onIntentChange, onSuggestion, onSendText, onMic, onFile }: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [intent, setIntent] = useState<ChatIntent>('audit');
   const feedRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -189,7 +191,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
           {INTENTS.map((it) => (
             <button
               key={it.key}
-              onClick={() => setIntent(it.key)}
+              onClick={() => onIntentChange(it.key)}
               disabled={isBusy}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                 intent === it.key

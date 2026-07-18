@@ -5,11 +5,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, WorkspaceMode, WorkspaceStatus } from './types';
+import { AppView, AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, TaskId, WorkspaceMode, WorkspaceStatus } from './types';
 import { DEFAULT_NCM_RULES, PRESET_SCENARIOS } from './data/mockScenarios';
 import { buildHeuristicAnalysis, computeAlerts, computeSavingsBrl, findRuleForNcm } from './engine/rulesEngine';
 import { classifyProduct, formatClassification } from './engine/classifier';
 import NavRail from './components/NavRail';
+import Home from './components/Home';
 import ChatPanel, { SuggestionPill } from './components/ChatPanel';
 import Workspace from './components/Workspace';
 import LiMinutaModal from './components/LiMinutaModal';
@@ -47,6 +48,8 @@ export default function App() {
   const [liPrefill, setLiPrefill] = useState<LiPrefillData | null>(null);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('audit');
+  const [view, setView] = useState<AppView>('home');
+  const [chatIntent, setChatIntent] = useState<ChatIntent>('audit');
 
   const msgCounter = useRef(0);
 
@@ -262,6 +265,54 @@ export default function App() {
 
   const closeLandedCost = () => setWorkspaceMode('audit');
 
+  /* ---------- Navegação por intenção (Home ⇄ Workspace) ---------- */
+
+  const navigateHome = () => {
+    if (isBusy) return;
+    setView('home');
+  };
+
+  // Dica curta exibida no chat ao abrir uma consulta rápida vinda da Home
+  const INTENT_HINTS: Partial<Record<ChatIntent, string>> = {
+    classify: 'Skill **Classificar NCM** ativada. Descreva o produto, cole a linha da fatura ou envie uma foto — devolvo a NCM sugerida com órgão anuente e justificativa.',
+    risk: 'Skill **Risco Aduaneiro** ativada. Descreva a operação (produto, NCM, origem) para eu calcular o score e listar bloqueios e oportunidades.'
+  };
+
+  // Abre uma tarefa da Home/NavRail mapeando o TaskId para a lógica existente
+  const openTask = (taskId: TaskId) => {
+    if (isBusy) return;
+
+    if (taskId === 'landedCost') {
+      setView('workspace');
+      openLandedCost();
+      return;
+    }
+
+    // Intenções cobertas hoje pela barra de comando multimodal
+    if (taskId === 'audit' || taskId === 'classify' || taskId === 'risk') {
+      setChatIntent(taskId);
+      setWorkspaceMode('audit');
+      setView('workspace');
+      const hint = INTENT_HINTS[taskId];
+      if (hint) pushMessage({ role: 'assistant', text: hint });
+      return;
+    }
+
+    // checklist, freight, margin, ncm, antidumping ainda não disponíveis:
+    // a UI já as marca como "em breve" e bloqueia o clique, então isto é só
+    // uma salvaguarda que não deveria ser alcançada.
+  };
+
+  // Barra de comando da Home: entra no workspace e despacha como auditoria
+  const runHomeCommand = (command: string) => {
+    if (isBusy) return;
+    setChatIntent('audit');
+    setWorkspaceMode('audit');
+    setView('workspace');
+    pushMessage({ role: 'user', text: command });
+    dispatchIntent(command, 'audit');
+  };
+
   /* ---------- Reatividade Workspace -> Chat ---------- */
 
   const buildAlertGuidance = (alert: AuditAlert) => {
@@ -307,52 +358,60 @@ export default function App() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
 
-      <NavRail onNewProcess={handleNewProcess} />
+      <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} />
 
-      {/* Coluna do chat com colapso animado: largura controlada aqui, conteúdo com largura mínima fixa para não amassar durante a transição */}
-      <div
-        className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
-          isChatCollapsed ? 'w-0 min-w-0' : 'w-[40%] min-w-[380px]'
-        }`}
-        id="chat-column"
-      >
-        <div className="h-full min-w-[380px]">
-          <ChatPanel
-            messages={messages}
-            isBusy={isBusy}
-            thinking={workspaceStatus === 'loading' ? { steps: CHAT_THOUGHTS, index: stepIndex } : null}
-            aiStatus={aiStatus}
-            suggestions={SUGGESTIONS}
-            onSuggestion={handleSuggestion}
-            onSendText={handleSendText}
-            onMic={handleMic}
-            onFile={handleFile}
+      {view === 'home' ? (
+        <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} />
+      ) : (
+        <>
+          {/* Coluna do chat com colapso animado: largura controlada aqui, conteúdo com largura mínima fixa para não amassar durante a transição */}
+          <div
+            className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+              isChatCollapsed ? 'w-0 min-w-0' : 'w-[40%] min-w-[380px]'
+            }`}
+            id="chat-column"
+          >
+            <div className="h-full min-w-[380px]">
+              <ChatPanel
+                messages={messages}
+                isBusy={isBusy}
+                thinking={workspaceStatus === 'loading' ? { steps: CHAT_THOUGHTS, index: stepIndex } : null}
+                aiStatus={aiStatus}
+                suggestions={SUGGESTIONS}
+                intent={chatIntent}
+                onIntentChange={setChatIntent}
+                onSuggestion={handleSuggestion}
+                onSendText={handleSendText}
+                onMic={handleMic}
+                onFile={handleFile}
+              />
+            </div>
+          </div>
+
+          {/* Toggle discreto na divisória chat / workspace */}
+          <div className="relative z-20 w-0">
+            <button
+              onClick={() => setIsChatCollapsed((prev) => !prev)}
+              title={isChatCollapsed ? 'Expandir painel de comando' : 'Recolher painel de comando'}
+              className="absolute top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-md transition hover:text-indigo-600 hover:shadow-lg"
+              id="chat-collapse-toggle"
+            >
+              {isChatCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+          </div>
+
+          <Workspace
+            status={workspaceStatus}
+            mode={workspaceMode}
+            analysis={activeAnalysis}
+            savingsBrl={activeAnalysis ? computeSavingsBrl(activeAnalysis.items, customRules) : 0}
+            onGenerateLi={openLiMinuta}
+            onAlertInquire={handleAlertInquire}
+            onOpenLandedCost={openLandedCost}
+            onCloseLandedCost={closeLandedCost}
           />
-        </div>
-      </div>
-
-      {/* Toggle discreto na divisória chat / workspace */}
-      <div className="relative z-20 w-0">
-        <button
-          onClick={() => setIsChatCollapsed((prev) => !prev)}
-          title={isChatCollapsed ? 'Expandir painel de comando' : 'Recolher painel de comando'}
-          className="absolute top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-md transition hover:text-indigo-600 hover:shadow-lg"
-          id="chat-collapse-toggle"
-        >
-          {isChatCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
-      </div>
-
-      <Workspace
-        status={workspaceStatus}
-        mode={workspaceMode}
-        analysis={activeAnalysis}
-        savingsBrl={activeAnalysis ? computeSavingsBrl(activeAnalysis.items, customRules) : 0}
-        onGenerateLi={openLiMinuta}
-        onAlertInquire={handleAlertInquire}
-        onOpenLandedCost={openLandedCost}
-        onCloseLandedCost={closeLandedCost}
-      />
+        </>
+      )}
 
       {liPrefill && (
         <LiMinutaModal
