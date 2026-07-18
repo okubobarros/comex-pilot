@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Marca do ComexPilot: puffin sobre ondas dentro de um disco azul→roxo,
- * recriação vetorial do logotipo oficial. Escala sem perda em qualquer tamanho.
+ * recriação vetorial fiel do logotipo oficial. Escala sem perda.
  */
 
 import React, { useId } from 'react';
@@ -14,7 +14,7 @@ interface LogoProps {
 }
 
 export default function Logo({ className, title = 'ComexPilot' }: LogoProps) {
-  // Ids únicos por instância evitam colisão de <defs> quando o logo aparece várias vezes
+  // Ids únicos por instância evitam colisão de <defs> quando o logo se repete
   const uid = useId().replace(/:/g, '');
   const gDisc = `disc-${uid}`;
   const gEye = `eye-${uid}`;
@@ -26,69 +26,60 @@ export default function Logo({ className, title = 'ComexPilot' }: LogoProps) {
     <svg viewBox="0 0 512 512" className={className} role="img" aria-label={title} xmlns="http://www.w3.org/2000/svg">
       <title>{title}</title>
       <defs>
-        <linearGradient id={gDisc} x1="70" y1="120" x2="452" y2="440" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#3B57F0" />
-          <stop offset="0.55" stopColor="#4B36D8" />
-          <stop offset="1" stopColor="#6C29D8" />
+        <linearGradient id={gDisc} x1="90" y1="440" x2="430" y2="80" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#3D5CF3" />
+          <stop offset="0.5" stopColor="#4A39D9" />
+          <stop offset="1" stopColor="#6E27D8" />
         </linearGradient>
-        <linearGradient id={gEye} x1="228" y1="188" x2="266" y2="228" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gEye} x1="228" y1="186" x2="268" y2="228" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#8A5CFF" />
-          <stop offset="1" stopColor="#4B41E6" />
+          <stop offset="1" stopColor="#4A34E8" />
         </linearGradient>
-        <linearGradient id={gBeakTop} x1="372" y1="150" x2="472" y2="256" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#FBA83A" />
-          <stop offset="1" stopColor="#F8791C" />
+        <linearGradient id={gBeakTop} x1="372" y1="130" x2="486" y2="244" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FBA637" />
+          <stop offset="1" stopColor="#F6731E" />
         </linearGradient>
-        <linearGradient id={gBeakBottom} x1="392" y1="288" x2="462" y2="352" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#F8791C" />
-          <stop offset="1" stopColor="#EC4A1B" />
+        <linearGradient id={gBeakBottom} x1="392" y1="296" x2="470" y2="360" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#F5701C" />
+          <stop offset="1" stopColor="#EE4A1C" />
         </linearGradient>
         <clipPath id={clip}>
-          <circle cx="256" cy="256" r="238" />
+          <circle cx="256" cy="256" r="246" />
         </clipPath>
       </defs>
 
       <g clipPath={`url(#${clip})`}>
         {/* Disco */}
-        <circle cx="256" cy="256" r="238" fill={`url(#${gDisc})`} />
+        <circle cx="256" cy="256" r="246" fill={`url(#${gDisc})`} />
 
-        {/* Cabeça do puffin (espaço branco), deixando a lua crescente à esquerda */}
-        <circle cx="300" cy="232" r="170" fill="#FFFFFF" />
+        {/* Cabeça do puffin (branco), deixando a lua crescente azul à esquerda */}
+        <circle cx="296" cy="236" r="170" fill="#FFFFFF" />
 
-        {/* Corpo d'água: onda colorida cobrindo a base */}
+        {/* Água: onda colorida cobrindo a base, varrendo para cima à direita */}
         <path
-          d="M 18 366 C 110 336 190 356 286 368 C 372 378 430 360 494 350 L 494 512 L 18 512 Z"
+          d="M 6 356 C 120 334 210 354 300 356 C 372 358 430 336 504 322 L 504 520 L 6 520 Z"
           fill={`url(#${gDisc})`}
         />
 
-        {/* Ondas brancas */}
-        <path
-          d="M 40 410 C 140 384 220 402 310 414 C 388 424 442 410 486 400"
-          fill="none"
-          stroke="#FFFFFF"
-          strokeWidth="15"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 70 462 C 160 440 240 456 322 466 C 394 474 440 464 476 456"
-          fill="none"
-          stroke="#FFFFFF"
-          strokeWidth="15"
-          strokeLinecap="round"
-        />
+        {/* Ondas brancas em camadas */}
+        <g fill="none" stroke="#FFFFFF" strokeLinecap="round">
+          <path d="M 44 388 C 150 366 246 384 336 388 C 406 391 452 372 498 344" strokeWidth="16" />
+          <path d="M 60 436 C 165 416 250 432 336 438 C 404 443 448 428 494 402" strokeWidth="16" />
+          <path d="M 150 480 C 230 466 300 476 366 480 C 410 483 440 474 470 462" strokeWidth="13" />
+        </g>
 
-        {/* Bico laranja (mandíbula superior e inferior, com fenda branca) */}
+        {/* Bico laranja: mandíbula superior e inferior, com a fenda branca da boca */}
         <path
-          d="M 366 150 C 416 150 456 188 478 236 C 452 246 420 250 392 252 C 384 218 374 184 366 150 Z"
+          d="M 372 150 C 384 108 402 78 424 66 C 452 96 480 150 494 208 C 470 224 430 236 388 244 C 382 212 376 180 372 150 Z"
           fill={`url(#${gBeakTop})`}
         />
         <path
-          d="M 392 288 C 428 292 456 312 470 342 C 442 356 414 356 394 350 C 388 330 388 308 392 288 Z"
+          d="M 392 296 C 430 300 466 318 484 348 C 456 366 420 366 396 356 C 388 338 388 314 392 296 Z"
           fill={`url(#${gBeakBottom})`}
         />
 
         {/* Olho */}
-        <circle cx="246" cy="206" r="25" fill={`url(#${gEye})`} />
+        <circle cx="244" cy="205" r="25" fill={`url(#${gEye})`} />
       </g>
     </svg>
   );
