@@ -12,19 +12,26 @@ import {
   FileSpreadsheet,
   Info,
   Loader2,
-  Scale,
   ShieldAlert,
   Sparkles,
-  TrendingUp
+  TrendingUp,
+  Calculator,
+  ChevronRight,
+  Boxes
 } from 'lucide-react';
-import { AuditAlert, InvoiceAnalysis, InvoiceItem, WorkspaceStatus } from '../types';
+import Logo from './Logo';
+import LandedCostDrawer from './LandedCostDrawer';
+import { AuditAlert, InvoiceAnalysis, InvoiceItem, WorkspaceMode, WorkspaceStatus } from '../types';
 
 interface WorkspaceProps {
   status: WorkspaceStatus;
+  mode: WorkspaceMode;
   analysis: InvoiceAnalysis | null;
   savingsBrl: number;
   onGenerateLi: (item: InvoiceItem) => void;
   onAlertInquire: (alert: AuditAlert) => void;
+  onOpenLandedCost: () => void;
+  onCloseLandedCost: () => void;
 }
 
 const formatCurrency = (val: number, curr: string = 'USD') =>
@@ -79,9 +86,14 @@ const getSeverityStyles = (severity: string) => {
   }
 };
 
-export default function Workspace({ status, analysis, savingsBrl, onGenerateLi, onAlertInquire }: WorkspaceProps) {
+export default function Workspace({ status, mode, analysis, savingsBrl, onGenerateLi, onAlertInquire, onOpenLandedCost, onCloseLandedCost }: WorkspaceProps) {
   // Botão de minuta em estado "Gerando..." (id do alerta ou do item)
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  // Skill densa ocupa o canvas por cima de qualquer estado de auditoria
+  if (mode === 'landedCost') {
+    return <LandedCostDrawer onClose={onCloseLandedCost} />;
+  }
 
   // Vincula um alerta ao item da fatura correspondente para prefill da LI
   const itemForAlert = (alert: AuditAlert): InvoiceItem | undefined => {
@@ -102,23 +114,46 @@ export default function Workspace({ status, analysis, savingsBrl, onGenerateLi, 
     }, 1500);
   };
 
-  /* ---------- EMPTY: boas-vindas suíças ---------- */
+  /* ---------- EMPTY: boas-vindas + cards de skills ---------- */
   if (status === 'empty') {
     return (
       <section className="flex h-full flex-1 items-center justify-center overflow-y-auto bg-slate-50" id="workspace-empty">
-        <div className="max-w-md px-8 text-center">
-          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-300">
-            <Scale className="h-6 w-6 stroke-1" />
-          </div>
+        <div className="w-full max-w-lg px-8 text-center">
+          <Logo className="mx-auto mb-6 h-16 w-16" />
           <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
             Workspace de Auditoria
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            Aguardando documento ou comando de voz para iniciar a auditoria aduaneira...
+            Aguardando documento ou comando de voz para iniciar a auditoria — ou abra uma skill estruturada abaixo.
           </p>
-          <div className="mx-auto mt-8 flex items-center justify-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-slate-300">
-            <span className="h-1 w-1 animate-pulse rounded-full bg-slate-300"></span>
-            Agente em standby
+
+          <div className="mt-8 space-y-2.5 text-left">
+            <span className="block text-center font-mono text-[10px] uppercase tracking-widest text-slate-400">Skills de missão</span>
+            <button
+              onClick={onOpenLandedCost}
+              className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-indigo-300 hover:shadow-md"
+              id="skill-landed-cost"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                <Calculator className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <span className="block text-sm font-semibold text-slate-900">Custeio e Viabilidade (Landed Cost)</span>
+                <span className="block text-xs text-slate-400">Formulário assistido em 3 passos: impostos, câmbio e margem alvo</span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-indigo-500" />
+            </button>
+
+            <div className="flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-left opacity-70">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-400">
+                <Boxes className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <span className="block text-sm font-semibold text-slate-500">Roteiro de Nacionalização</span>
+                <span className="block text-xs text-slate-400">Passo a passo DI/Duimp · em breve</span>
+              </div>
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">Em breve</span>
+            </div>
           </div>
         </div>
       </section>

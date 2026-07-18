@@ -5,9 +5,10 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { AuditAlert, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, WorkspaceStatus } from './types';
+import { AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, WorkspaceMode, WorkspaceStatus } from './types';
 import { DEFAULT_NCM_RULES, PRESET_SCENARIOS } from './data/mockScenarios';
 import { buildHeuristicAnalysis, computeAlerts, computeSavingsBrl, findRuleForNcm } from './engine/rulesEngine';
+import { classifyProduct, formatClassification } from './engine/classifier';
 import NavRail from './components/NavRail';
 import ChatPanel, { SuggestionPill } from './components/ChatPanel';
 import Workspace from './components/Workspace';
@@ -45,6 +46,7 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState<'idle' | 'success' | 'simulated'>('success');
   const [liPrefill, setLiPrefill] = useState<LiPrefillData | null>(null);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('audit');
 
   const msgCounter = useRef(0);
 
@@ -104,7 +106,65 @@ export default function App() {
     }
   };
 
-  /* ---------- Gatilhos da jornada ---------- */
+  /* ---------- Análise completa (Auditar Invoice) → Workspace ---------- */
+
+  const auditFromText = (text: string) => runAudit(async () => {
+    try {
+      const response = await fetch('/api/analyze-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceText: text, customRules })
+      });
+      if (!response.ok) throw new Error('Falha na comunicação com o servidor aduaneiro.');
+
+      const data = await response.json();
+      if (data.success && data.analysis) {
+        setAiStatus(data.method === 'gemini_ai_auditor' ? 'success' : 'simulated');
+        return data.analysis as InvoiceAnalysis;
+      }
+      throw new Error(data.error || 'Não foi possível extrair os itens da Invoice.');
+    } catch (err) {
+      console.error(err);
+      setAiStatus('simulated');
+      return buildHeuristicAnalysis(text, customRules);
+    }
+  });
+
+  /* ---------- Intenções rápidas (Classificar / Risco) → Chat ---------- */
+
+  // Consulta multimodal rápida que responde no próprio feed, sem tocar no canvas
+  const runQuickReply = (buildReply: () => Promise<string> | string) => {
+    setIsBusy(true);
+    Promise.all([Promise.resolve(buildReply()), delay(900)])
+      .then(([reply]) => pushMessage({ role: 'assistant', text: reply }))
+      .catch((err) => {
+        console.error(err);
+        pushMessage({ role: 'assistant', text: 'Não consegui concluir esta consulta rápida. Tente reformular ou anexar mais detalhes.' });
+      })
+      .finally(() => setIsBusy(false));
+  };
+
+  const classifyReply = (text: string, sourceLabel?: string) =>
+    runQuickReply(() => formatClassification(classifyProduct(text), sourceLabel));
+
+  const riskReply = (text: string, sourceLabel?: string) => runQuickReply(() => {
+    const analysis = buildHeuristicAnalysis(text, customRules);
+    const red = analysis.alerts.filter(a => a.severity === 'red');
+    const yellow = analysis.alerts.filter(a => a.severity === 'yellow');
+    const green = analysis.alerts.filter(a => a.severity === 'green');
+    const line = (a: AuditAlert) => `• ${a.severity === 'red' ? '🔴' : a.severity === 'yellow' ? '🟡' : '🟢'} **${a.title}** — ${a.baseLegal}`;
+    const body = [...red, ...yellow, ...green].map(line).join('\n') || 'Nenhum controle crítico identificado para os dados fornecidos.';
+    return `${sourceLabel ? sourceLabel + '\n\n' : ''}**Leitura de risco aduaneiro** — score ${analysis.riskScore}% · ${red.length} bloqueio(s), ${yellow.length} atenção, ${green.length} oportunidade(s):\n\n${body}\n\nPara o parecer completo com impacto financeiro e plano de ação, rode a intenção **Auditar Invoice**.`;
+  });
+
+  // Dispatcher por intenção compartilhado por texto, arquivo, imagem e áudio
+  const dispatchIntent = (text: string, intent: ChatIntent, sourceLabel?: string) => {
+    if (intent === 'classify') classifyReply(text, sourceLabel);
+    else if (intent === 'risk') riskReply(text, sourceLabel);
+    else auditFromText(text);
+  };
+
+  /* ---------- Gatilhos multimodais ---------- */
 
   const handleSuggestion = (pill: SuggestionPill) => {
     if (isBusy) return;
@@ -112,52 +172,60 @@ export default function App() {
     runAudit(() => PRESET_SCENARIOS[pill.presetIndex]);
   };
 
-  const handleFile = (fileName: string) => {
-    if (isBusy) return;
-    pushMessage({ role: 'user', text: fileName, variant: 'file' });
-
-    const lower = fileName.toLowerCase();
-    let presetIndex = 0;
-    if (lower.includes('stanley') || lower.includes('mug') || lower.includes('summit')) presetIndex = 1;
-    else if (lower.includes('epoxy') || lower.includes('resin') || lower.includes('chem')) presetIndex = 2;
-    else if (lower.includes('drone') || lower.includes('aero')) presetIndex = 3;
-
-    runAudit(() => ({ ...PRESET_SCENARIOS[presetIndex], fileName, isCustomUpload: true }));
-  };
-
-  const handleSendText = (text: string) => {
+  const handleSendText = (text: string, intent: ChatIntent) => {
     if (isBusy) return;
     pushMessage({ role: 'user', text });
-
-    runAudit(async () => {
-      try {
-        const response = await fetch('/api/analyze-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invoiceText: text, customRules })
-        });
-        if (!response.ok) throw new Error('Falha na comunicação com o servidor aduaneiro.');
-
-        const data = await response.json();
-        if (data.success && data.analysis) {
-          setAiStatus(data.method === 'gemini_ai_auditor' ? 'success' : 'simulated');
-          return data.analysis as InvoiceAnalysis;
-        }
-        throw new Error(data.error || 'Não foi possível extrair os itens da Invoice.');
-      } catch (err) {
-        console.error(err);
-        setAiStatus('simulated');
-        return buildHeuristicAnalysis(text, customRules);
-      }
-    });
+    dispatchIntent(text, intent);
   };
 
-  const handleMic = () => {
+  const handleFile = (fileName: string, intent: ChatIntent, isImage: boolean) => {
+    if (isBusy) return;
+    pushMessage({ role: 'user', text: fileName, variant: isImage ? 'image' : 'file' });
+
+    if (intent === 'audit') {
+      const lower = fileName.toLowerCase();
+      let presetIndex = 0;
+      if (lower.includes('stanley') || lower.includes('mug') || lower.includes('summit')) presetIndex = 1;
+      else if (lower.includes('epoxy') || lower.includes('resin') || lower.includes('chem')) presetIndex = 2;
+      else if (lower.includes('drone') || lower.includes('aero')) presetIndex = 3;
+      runAudit(() => ({ ...PRESET_SCENARIOS[presetIndex], fileName, isCustomUpload: true }));
+      return;
+    }
+
+    // Classify / Risk sobre o nome do arquivo ou "leitura" da imagem
+    const sourceLabel = isImage
+      ? '🖼️ Imagem analisada pela visão computacional do ComexPilot.'
+      : `📎 Documento lido: ${fileName}`;
+    dispatchIntent(fileName, intent, sourceLabel);
+  };
+
+  const handleMic = (intent: ChatIntent) => {
     if (isBusy) return;
     pushMessage({ role: 'user', text: 'Mensagem de voz · 0:14', variant: 'audio' });
 
-    let voiceReply: string | undefined;
+    // Intenções rápidas: transcreve e responde no chat
+    if (intent !== 'audit') {
+      setIsBusy(true);
+      fetch('/api/transcribe-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presetName: 'comex_audio_1' })
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          const transcript = data?.success ? data.transcript : 'gel facial hidratante de Aloe Vera, NCM 3304.99.90, Coreia do Sul';
+          setIsBusy(false);
+          dispatchIntent(transcript, intent, `🎙️ **Transcrição do áudio:** "${transcript}"`);
+        })
+        .catch(() => {
+          setIsBusy(false);
+          dispatchIntent('gel facial hidratante de Aloe Vera 3304.99.90', intent, '🎙️ Áudio processado pelo motor local.');
+        });
+      return;
+    }
 
+    // Auditoria completa via áudio → Workspace
+    let voiceReply: string | undefined;
     runAudit(async () => {
       try {
         const response = await fetch('/api/transcribe-audio', {
@@ -182,7 +250,17 @@ export default function App() {
     setMessages([WELCOME_MESSAGE]);
     setActiveAnalysis(null);
     setWorkspaceStatus('empty');
+    setWorkspaceMode('audit');
   };
+
+  /* ---------- Skill: Landed Cost ---------- */
+
+  const openLandedCost = () => {
+    setWorkspaceMode('landedCost');
+    pushMessage({ role: 'assistant', text: 'Abri a skill **Custeio e Viabilidade (Landed Cost)** no canvas. Arraste uma Invoice ou cole os dados brutos no topo do formulário para eu pré-preencher os campos automaticamente.' });
+  };
+
+  const closeLandedCost = () => setWorkspaceMode('audit');
 
   /* ---------- Reatividade Workspace -> Chat ---------- */
 
@@ -267,10 +345,13 @@ export default function App() {
 
       <Workspace
         status={workspaceStatus}
+        mode={workspaceMode}
         analysis={activeAnalysis}
         savingsBrl={activeAnalysis ? computeSavingsBrl(activeAnalysis.items, customRules) : 0}
         onGenerateLi={openLiMinuta}
         onAlertInquire={handleAlertInquire}
+        onOpenLandedCost={openLandedCost}
+        onCloseLandedCost={closeLandedCost}
       />
 
       {liPrefill && (

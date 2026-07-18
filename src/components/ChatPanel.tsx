@@ -4,8 +4,9 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, Paperclip, ArrowUp, Scale, Check, Loader2 } from 'lucide-react';
-import { ChatMessage } from '../types';
+import { Mic, Paperclip, ArrowUp, Check, Loader2, ImageIcon, FileText, ScanSearch, ShieldCheck } from 'lucide-react';
+import Logo from './Logo';
+import { ChatIntent, ChatMessage } from '../types';
 
 export interface SuggestionPill {
   label: string;
@@ -25,10 +26,22 @@ interface ChatPanelProps {
   aiStatus: 'idle' | 'success' | 'simulated';
   suggestions: SuggestionPill[];
   onSuggestion: (pill: SuggestionPill) => void;
-  onSendText: (text: string) => void;
-  onMic: () => void;
-  onFile: (fileName: string) => void;
+  onSendText: (text: string, intent: ChatIntent) => void;
+  onMic: (intent: ChatIntent) => void;
+  onFile: (fileName: string, intent: ChatIntent, isImage: boolean) => void;
 }
+
+const INTENTS: { key: ChatIntent; label: string; icon: React.ReactNode }[] = [
+  { key: 'audit', label: 'Auditar Invoice', icon: <FileText className="h-3.5 w-3.5" /> },
+  { key: 'classify', label: 'Classificar NCM', icon: <ScanSearch className="h-3.5 w-3.5" /> },
+  { key: 'risk', label: 'Risco Aduaneiro', icon: <ShieldCheck className="h-3.5 w-3.5" /> }
+];
+
+const PLACEHOLDERS: Record<ChatIntent, string> = {
+  audit: 'Pergunte ao ComexPilot ou descreva a Invoice...',
+  classify: 'Descreva o produto ou cole a linha da fatura para classificar a NCM...',
+  risk: 'Descreva a operação para avaliar o risco aduaneiro...'
+};
 
 /** Renderiza **negrito** simples nas respostas do agente. */
 function renderRich(text: string) {
@@ -42,8 +55,10 @@ const WAVE_BARS = [6, 12, 18, 10, 4, 16, 22, 14, 8, 18, 12, 6, 16, 10, 14];
 export default function ChatPanel({ messages, isBusy, thinking, aiStatus, suggestions, onSuggestion, onSendText, onMic, onFile }: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [intent, setIntent] = useState<ChatIntent>('audit');
   const feedRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
@@ -53,15 +68,17 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
     const text = draft.trim();
     if (!text || isBusy) return;
     setDraft('');
-    onSendText(text);
+    onSendText(text, intent);
   };
+
+  const isImageFile = (name: string) => /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(name);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     if (isBusy) return;
     const file = e.dataTransfer.files?.[0];
-    if (file) onFile(file.name);
+    if (file) onFile(file.name, intent, isImageFile(file.name));
   };
 
   return (
@@ -89,9 +106,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
         {messages.map((msg) => (
           msg.role === 'assistant' ? (
             <div key={msg.id} className="flex items-start gap-2.5">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-                <Scale className="h-3.5 w-3.5" />
-              </div>
+              <Logo className="mt-0.5 h-7 w-7 shrink-0" />
               <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed text-slate-600">
                 {renderRich(msg.text)}
               </div>
@@ -114,6 +129,11 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
                     <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-300" />
                     <span className="font-mono text-xs">{msg.text}</span>
                   </div>
+                ) : msg.variant === 'image' ? (
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="h-3.5 w-3.5 shrink-0 text-indigo-300" />
+                    <span className="font-mono text-xs">{msg.text}</span>
+                  </div>
                 ) : (
                   msg.text
                 )}
@@ -124,9 +144,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
 
         {isBusy && (
           <div className="flex items-start gap-2.5">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <Scale className="h-3.5 w-3.5" />
-            </div>
+            <Logo className="mt-0.5 h-7 w-7 shrink-0" />
             {thinking ? (
               <div className="space-y-2.5 rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3.5 py-3" id="agent-thoughts">
                 {thinking.steps.slice(0, thinking.index + 1).map((step, i) => (
@@ -166,6 +184,25 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
           ))}
         </div>
 
+        {/* Seletor de intenção multimodal (estilo Digicust) */}
+        <div className="mb-2.5 flex flex-wrap gap-1.5" id="intent-selector">
+          {INTENTS.map((it) => (
+            <button
+              key={it.key}
+              onClick={() => setIntent(it.key)}
+              disabled={isBusy}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
+                intent === it.key
+                  ? 'bg-slate-900 text-white'
+                  : 'border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+              }`}
+            >
+              {it.icon}
+              {it.label}
+            </button>
+          ))}
+        </div>
+
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -181,17 +218,36 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) onFile(file.name);
+              if (file) onFile(file.name, intent, isImageFile(file.name));
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFile(file.name, intent, true);
               e.target.value = '';
             }}
           />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isBusy}
-            title="Anexar Invoice ou BL"
+            title="Anexar Invoice, BL ou documento"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
           >
             <Paperclip className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isBusy}
+            title="Enviar foto do produto ou mercadoria"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
+          >
+            <ImageIcon className="h-4 w-4" />
           </button>
 
           <input
@@ -199,13 +255,13 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-            placeholder={dragOver ? 'Solte o documento para auditar...' : 'Pergunte ao ComexPilot...'}
+            placeholder={dragOver ? 'Solte o arquivo aqui...' : PLACEHOLDERS[intent]}
             disabled={isBusy}
             className="min-w-0 flex-1 bg-transparent px-1 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-50"
           />
 
           <button
-            onClick={onMic}
+            onClick={() => onMic(intent)}
             disabled={isBusy}
             title="Simular áudio do despachante (WhatsApp)"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"

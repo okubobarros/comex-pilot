@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { FilePlus2, History, Ship, Settings, Scale } from 'lucide-react';
+import { FilePlus2, History, Ship, Settings } from 'lucide-react';
+import Logo from './Logo';
 
 interface NavRailProps {
   onNewProcess: () => void;
@@ -44,9 +45,7 @@ export default function NavRail({ onNewProcess }: NavRailProps) {
       <div className="flex flex-col gap-1.5">
         {/* Brand */}
         <div className="mb-4 flex h-10 items-center" title="ComexPilot">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-            <Scale className="h-5 w-5" />
-          </div>
+          <Logo className="h-9 w-9 shrink-0" />
           <span className={`font-display font-semibold tracking-tight text-white ${labelClass}`}>
             ComexPilot
           </span>
