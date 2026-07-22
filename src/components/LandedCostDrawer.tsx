@@ -14,6 +14,7 @@ import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
 import type { CostingResult, CostingRates } from '../engine/costing';
 import { useReformaDate } from '../context/DateContext';
+import { useEvidence } from '../context/EvidenceContext';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
@@ -54,6 +55,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [ptaxDate, setPtaxDate] = useState<string | null>(null);
   const [ptaxLoading, setPtaxLoading] = useState(false);
   const { dataFatoGerador, fase } = useReformaDate();
+  const { setEvidence } = useEvidence();
 
   // Busca a PTAX do dia na API do BCB e preenche o câmbio automaticamente.
   const fetchPtax = async () => {
@@ -94,8 +96,21 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
         }),
       });
       const data = await resp.json();
-      if (data.success) { setEngine(data.result); setEngineRates(data.rates); }
-      else setEngineErr(data.error || 'Motor indisponível.');
+      if (data.success) {
+        setEngine(data.result);
+        setEngineRates(data.rates);
+        const r = data.rates;
+        setEvidence({
+          agent: 'costing',
+          titulo: `Custeio · NCM ${inputs.ncm || '—'} · ${fase.label}`,
+          steps: [
+            `Resolvi as alíquotas reais do NCM: II ${r.iiPct}% · IPI ${r.ipiPct}% · PIS ${r.pisPct}% · COFINS ${r.cofinsPct}%.`,
+            `ICMS ${r.icmsPct}% (UF de ${inputs.entryPort}) calculado "por dentro"; AFRMM ${r.afrmmPct}% e Taxa Siscomex aplicados.`,
+            `Regra IBS/CBS vigente em ${fase.label}: CBS ${r.reforma.cbsPct}% + IBS ${r.reforma.ibsPct}% ${r.reforma.cbsCompensavel ? '(compensáveis)' : '(impacto de caixa)'}.`,
+          ],
+          citations: [{ ref: 'LC 214/2025', nota: r.reforma.baseLegal }, { ref: 'Decreto 12.955/2026', nota: 'Base de cálculo do CBS/IBS (art. 13).' }],
+        });
+      } else setEngineErr(data.error || 'Motor indisponível.');
     } catch {
       setEngineErr('Falha ao contatar o motor de custeio.');
     } finally {

@@ -16,8 +16,9 @@ import Workspace from './components/Workspace';
 import LiMinutaModal from './components/LiMinutaModal';
 import TopBar from './components/os/TopBar';
 import AgentDock, { AgentId } from './components/os/AgentDock';
-import { DateProvider } from './context/DateContext';
-import { ProcessProvider, Processo } from './context/ProcessContext';
+import EvidencePanel from './components/os/EvidencePanel';
+import type { Processo } from './context/ProcessContext';
+import { useEvidence } from './context/EvidenceContext';
 
 const CHAT_THOUGHTS = [
   '🔍 Lendo documento...',
@@ -54,6 +55,7 @@ export default function App() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('audit');
   const [view, setView] = useState<AppView>('home');
   const [chatIntent, setChatIntent] = useState<ChatIntent>('audit');
+  const { setEvidence } = useEvidence();
 
   const msgCounter = useRef(0);
 
@@ -101,6 +103,26 @@ export default function App() {
 
       setActiveAnalysis(finalAnalysis);
       setWorkspaceStatus('complete');
+
+      const canal = finalAnalysis.riskScore >= 70 ? 'vermelho' : finalAnalysis.riskScore >= 30 ? 'amarelo' : 'verde';
+      const refs = new Set<string>();
+      finalAnalysis.alerts.forEach((a) => {
+        if (`${a.title} ${a.baseLegal}`.toUpperCase().includes('ANVISA')) {
+          refs.add('RDC 752/2022');
+          refs.add('RDC 907/2024');
+        }
+      });
+      setEvidence({
+        agent: 'audit',
+        titulo: `Auditoria · ${finalAnalysis.fileName}`,
+        steps: [
+          `Extraí ${finalAnalysis.items.length} item(ns) da fatura e normalizei NCM e valores.`,
+          'Cruzei cada NCM com o motor de regras (anuência, antidumping, valoração aduaneira).',
+          `Score de risco calculado: ${finalAnalysis.riskScore}% — canal ${canal}.`,
+        ],
+        citations: [...refs].map((ref) => ({ ref })),
+      });
+
       const extraReply = getExtraReply?.();
       if (extraReply) pushMessage({ role: 'assistant', text: extraReply });
       pushMessage({ role: 'assistant', text: summarize(finalAnalysis) });
@@ -390,8 +412,6 @@ export default function App() {
   const openProcess = (p: Processo) => onSelectAgent(p.agente);
 
   return (
-    <DateProvider>
-    <ProcessProvider>
     <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
 
       <TopBar />
@@ -451,6 +471,7 @@ export default function App() {
           />
         </>
       )}
+      <EvidencePanel />
       </div>
 
       <AgentDock active={activeAgent} onSelect={onSelectAgent} />
@@ -463,7 +484,5 @@ export default function App() {
       )}
 
     </div>
-    </ProcessProvider>
-    </DateProvider>
   );
 }

@@ -11,6 +11,7 @@ import dotenv from "dotenv";
 import { COSMETICS_DATABASE } from "./src/data/cosmeticsDb";
 import { costingHandler } from "./server/costingService";
 import { ptaxHandler } from "./server/ptaxService";
+import { normaHandler } from "./server/normaService";
 
 dotenv.config();
 
@@ -21,6 +22,8 @@ app.use(express.json());
 app.post("/api/costing", costingHandler);
 // Câmbio PTAX ao vivo (API pública do Banco Central).
 app.get("/api/ptax", ptaxHandler);
+// Consulta de norma por identificação (citação clicável do Painel de Evidências).
+app.get("/api/norma", normaHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 
