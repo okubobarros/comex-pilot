@@ -12,12 +12,22 @@ Pipeline de ingestão das fontes (planilhas/CSV) para o Postgres. Ver
   ```
   Idempotente e reprodutível (lê CSVs versionados no repo).
 
-## A construir (Sprint 1)
+## Disponível (Sprint 1)
 
-- `etl_ncm.py` — base NCM completa (15.161) do `Tabela_NCM_Vigente_*.xlsx`.
-- `etl_tributos.py` — `ncm_tributo` da aba `Ctax` (10.520+).
-- `etl_referencia.py` — `icms_uf`, `siscomex_taxa`, `cambio_ptax` (bootstrap).
+- **`load_reference.py`** — carrega a base de referência completa no schema `mcat`, direto no
+  Postgres via `DATABASE_URL` (idempotente). Fontes em `data/sources/`:
+  `ncm` (15.156) · `ncm_tributo` (10.512 — aba **`tax`**, não `Ctax`) · `icms_uf` (27) ·
+  `siscomex_taxa` (523) · `cambio_ptax` (bootstrap).
+  ```bash
+  export DATABASE_URL="postgres://...supabase...:5432/postgres"   # ligação direta
+  python scripts/etl/load_reference.py
+  ```
+  Requer `psycopg[binary]` e `openpyxl`. Validado ponta a ponta em pgvector pg16.
+
+## A construir (próximo)
+
 - `sync_ptax.py` — sincroniza câmbio via API BCB Olinda (contínuo).
+- `etl_anuencia.py` — expande `ncm_anuencia` além do cosmético (parsing de tratamentos por segmento).
 
 Princípios: upsert por chave natural, versionamento por vigência, normalização
 (vírgula→ponto, `Sim/Não`→bool, `9999`→sentinela), log em `event_log`.

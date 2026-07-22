@@ -18,17 +18,19 @@ risco. Sprints de ~1–2 semanas; ajustar à capacidade real do time._
 > Nota: os fluxos n8n são antigos e **não serão reaproveitados nem rotacionados** — decisão do CEO.
 > Sem ação de segurança pendente.
 
-## Sprint 1 — Ingestão da base real (NCM + tributos)
+## Sprint 1 — Ingestão da base real (NCM + tributos) 🚧 EM ANDAMENTO
 
 **Objetivo:** a verdade sai da planilha e vai para o banco.
 
-- [ ] Script ETL `scripts/etl/` idempotente para: `ncm` (15.161), `ncm_tributo` (`Ctax`), `icms_uf`, `siscomex_taxa`, `cambio_ptax`. Ver [data/ncm-tax-base.md](../data/ncm-tax-base.md).
-- [ ] Normalização (vírgula→ponto, `Sim/Não`→bool, sentinela `9999`, código nos 2 formatos).
-- [ ] Semear `orgao_anuente` (ANVISA, MAPA, IBAMA, INMETRO, ANATEL, DECEX, SUFRAMA).
-- [ ] Parsing de `Tratamentos Administrativos` → `ncm_anuencia` (curadoria **cosmético** primeiro).
+- [x] Script ETL `scripts/etl/load_reference.py` idempotente: `ncm` (15.156), `ncm_tributo` (10.512, aba **`tax`**), `icms_uf` (27), `siscomex_taxa` (523), `cambio_ptax` (bootstrap). Validado em pgvector pg16.
+- [x] Normalização (vírgula→ponto, `Sim/Não`→bool, sentinela `9999`); FK-safe (tributo só de NCM existente).
+- [x] `orgao_anuente` semeado (Sprint 0) + `ncm_anuencia` cosmético (Sprint 0).
+- [ ] **Você:** rodar o ETL contra o Supabase (`DATABASE_URL`). Ver [ops/sprint-1.md](../ops/sprint-1.md).
+- [ ] `sync_ptax.py` — câmbio contínuo via API BCB.
+- [ ] Parsing de `Tratamentos Administrativos` → `ncm_anuencia` para além do cosmético.
 - [ ] Registro de carga em `event_log`.
 
-**Entrega:** `SELECT` de qualquer NCM retorna tributos e anuências reais.
+**Entrega parcial:** ETL validado; falta você aplicar no Supabase + PTAX contínuo.
 
 ## Sprint 2 — App lê a base real (fim do mock)
 

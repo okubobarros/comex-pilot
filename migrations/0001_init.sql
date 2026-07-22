@@ -32,7 +32,7 @@ create table if not exists ncm (
 create index if not exists idx_ncm_codigo_norm on ncm(codigo_norm);
 create index if not exists idx_ncm_descricao_fts on ncm using gin (to_tsvector('portuguese', descricao));
 
--- Tributos federais por NCM (versionado). Fonte: aba Ctax do tax_calc.xlsx
+-- Tributos federais por NCM (versionado). Fonte: aba `tax` do tax_calc.xlsx (a `Ctax` está vazia)
 create table if not exists ncm_tributo (
   ncm_codigo      text not null references ncm(codigo),
   vigencia_inicio date not null default current_date,

@@ -35,7 +35,7 @@ real, começando pelo piloto **cosmético** (ANVISA) de ponta a ponta._
 
 | # | Item | Status | O que falta | Fonte | Prio | Quem |
 |---|---|---|---|---|---|---|
-| 2.1 | II, IPI, PIS, COFINS por NCM (10.520+ linhas) | ✅ | — (`tax_calc.xlsx` aba `Ctax`) | TEC / Receita | P0 | — |
+| 2.1 | II, IPI, PIS, COFINS por NCM (10.519 linhas) | ✅ | carregado na Sprint 1 (`tax_calc.xlsx` aba **`tax`**; a `Ctax` está vazia) | TEC / Receita | P0 | — |
 | 2.2 | Antidumping — **detalhe** (não só o flag) | 🟡 | Alíquota/US$ por kg, origem, nº da resolução, vigência, por NCM | Gecex/CAMEX (resoluções antidumping) | P1 | 🧑‍💼 |
 | 2.3 | CIDE e Medidas compensatórias — detalhe | 🟡 | Base de cálculo e alíquota quando aplicável | Receita | P2 | ⚖️ |
 | 2.4 | Data-base dos tributos (quando essa tabela foi extraída) | 🔴 | Confirmar a data de vigência p/ versionar corretamente | interno | P0 | 🧑‍💼 |

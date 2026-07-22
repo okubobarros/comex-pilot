@@ -8,7 +8,7 @@ e descreve o pipeline de ingestão._
 | Arquivo | Conteúdo | Vira tabela |
 |---|---|---|
 | `Tabela_NCM_Vigente_20260721.xlsx` → aba `Tabela NCM` | 15.161 códigos hierárquicos | `ncm` |
-| `tax_calc.xlsx` → aba `Ctax` (ou `tax`) | Tributos federais por NCM (10.520+ linhas) | `ncm_tributo` (+ semente de `ncm_anuencia`) |
+| `tax_calc.xlsx` → aba **`tax`** | Tributos federais por NCM (10.519 linhas, 100% com II) | `ncm_tributo` (+ semente de `ncm_anuencia`) |
 | `tax_calc.xlsx` → aba `icms` | ICMS/AFRMM por UF (27) | `icms_uf` |
 | `tax_calc.xlsx` → aba `siscomex` | Taxa por nº de adições | `siscomex_taxa` |
 | `tax_calc.xlsx` → aba `exchange_rate` | Câmbio diário USD/EUR | `cambio_ptax` |
@@ -22,8 +22,9 @@ e descreve o pipeline de ingestão._
   `0101.21.00` (item 8díg). O `nivel` e o `parent_codigo` derivam do número de dígitos.
 - `Data Fim = 31/12/9999` é sentinela de "vigente" → mapear para `vigencia_fim`.
 
-**`Ctax`** (variante limpa; preferir sobre `tax` que tem coluna `Código2` redundante):
-`Código | Descrição | Descrição Concatenada | II(%) | IPI(%) | PIS(%) | COFINS(%) | CIDE | Antidumping | Medidas Compensatórias | Tratamentos Administrativos`
+**`tax`** (⚠️ usar esta, NÃO a `Ctax` — a `Ctax` está 98% vazia; verificado na Sprint 1):
+`Código | Código2 | Descrição Concatenada | Descrição | II(%) | IPI(%) | PIS(%) | COFINS(%) | CIDE | Antidumping | Medidas Compensatórias | Tratamentos Administrativos`
+(II na coluna índice 4; o código com pontos está na coluna 0)
 - `Sim/Não` → boolean.
 - `Tratamentos Administrativos` é texto longo com anuências (ex.: "Mercadoria sujeita à anuência
   de…") → **fonte para popular `ncm_anuencia`** via parsing por palavra-chave (ANVISA, MAPA, IBAMA…).

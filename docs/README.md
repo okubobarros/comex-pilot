@@ -20,6 +20,7 @@ aduaneira e tributária) e do **ComexPilot** (o app que a materializa).
 | [data/incoming-artifacts-analysis.md](data/incoming-artifacts-analysis.md) | Triagem do lote de artefatos recebidos: o que serve, é parcial, descartar, e o que falta |
 | [ops/n8n-flows-audit.md](ops/n8n-flows-audit.md) | Fluxos n8n legados (referência de lógica) + proposta de melhoria que os substitui |
 | [ops/sprint-0.md](ops/sprint-0.md) | Sprint 0 entregue: schema + seeds do piloto cosmético, como aplicar e evidência de validação |
+| [ops/sprint-1.md](ops/sprint-1.md) | Sprint 1 (parcial): ETL da base real (NCM 15k + tributos + referência), como rodar e validação |
 | [roadmap/sprints.md](roadmap/sprints.md) | Plano de sprints derivado do roadmap do PRD |
 
 ## Como reproduzir "a ideia do app real"
