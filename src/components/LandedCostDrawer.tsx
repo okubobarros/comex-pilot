@@ -13,6 +13,7 @@ import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
 import type { CostingResult, CostingRates } from '../engine/costing';
+import { useReformaDate } from '../context/DateContext';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
@@ -52,6 +53,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [engineLoading, setEngineLoading] = useState(false);
   const [ptaxDate, setPtaxDate] = useState<string | null>(null);
   const [ptaxLoading, setPtaxLoading] = useState(false);
+  const { dataFatoGerador, fase } = useReformaDate();
 
   // Busca a PTAX do dia na API do BCB e preenche o câmbio automaticamente.
   const fetchPtax = async () => {
@@ -88,6 +90,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
           ncm: inputs.ncm, uf: ufFromPort(inputs.entryPort), modal: 'longo_curso',
           qtdeAdicoes: 1, fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd,
           insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl,
+          dataFatoGerador,
         }),
       });
       const data = await resp.json();
@@ -99,6 +102,12 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
       setEngineLoading(false);
     }
   };
+
+  // Time Machine: se já há resultado, recalcula ao mudar a fase da Reforma.
+  useEffect(() => {
+    if (showResult) calcular();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataFatoGerador]);
 
   const set = <K extends keyof LandedCostInputs>(key: K, value: LandedCostInputs[K]) =>
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -380,6 +389,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
                           <Sparkles className="h-3.5 w-3.5" /> Motor de custeio · alíquotas reais (mcat)
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-medium text-slate-500">{fase.label}{fase.provisional ? ' · provisório' : ''}</span>
                         </span>
                         {engineRates && (
                           <span className="font-mono text-[10px] text-slate-400">

@@ -14,6 +14,9 @@ import Home from './components/Home';
 import ChatPanel, { SuggestionPill } from './components/ChatPanel';
 import Workspace from './components/Workspace';
 import LiMinutaModal from './components/LiMinutaModal';
+import TopBar from './components/os/TopBar';
+import AgentDock, { AgentId } from './components/os/AgentDock';
+import { DateProvider } from './context/DateContext';
 
 const CHAT_THOUGHTS = [
   '🔍 Lendo documento...',
@@ -355,9 +358,40 @@ export default function App() {
     });
   };
 
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
+  /* ---------- Dock de agentes (OS Shell) ---------- */
 
+  const onSelectAgent = (id: AgentId) => {
+    if (isBusy) return;
+    if (id === 'costing') return openTask('landedCost');
+    if (id === 'ncm') return openTask('classify');
+    if (id === 'audit') return openTask('audit');
+    if (id === 'chat') {
+      setChatIntent('audit');
+      setWorkspaceMode('audit');
+      setView('workspace');
+      return;
+    }
+    if (id === 'li') {
+      setWorkspaceMode('audit');
+      setView('workspace');
+      pushMessage({ role: 'assistant', text: 'O **Gerador de LI** monta a minuta a partir de uma auditoria. Rode **Auditar documentos** e clique em *Gerar Minuta de LI* no bloqueio de anuência ANVISA.' });
+      return;
+    }
+  };
+
+  const activeAgent: AgentId | null =
+    view === 'home' ? null
+    : workspaceMode === 'landedCost' ? 'costing'
+    : chatIntent === 'classify' ? 'ncm'
+    : 'audit';
+
+  return (
+    <DateProvider>
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
+
+      <TopBar />
+
+      <div className="flex min-h-0 flex-1">
       <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} />
 
       {view === 'home' ? (
@@ -412,6 +446,9 @@ export default function App() {
           />
         </>
       )}
+      </div>
+
+      <AgentDock active={activeAgent} onSelect={onSelectAgent} />
 
       {liPrefill && (
         <LiMinutaModal
@@ -421,5 +458,6 @@ export default function App() {
       )}
 
     </div>
+    </DateProvider>
   );
 }
