@@ -33,7 +33,7 @@ interface AgentDockProps {
 
 export default function AgentDock({ active, onSelect }: AgentDockProps) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center" id="os-agent-dock">
+    <div className="pointer-events-none fixed bottom-3 right-4 z-40 flex justify-end lg:right-[19rem]" id="os-agent-dock">
       <div className="pointer-events-auto flex items-end gap-1.5 rounded-2xl border border-slate-200 bg-white/90 px-2 py-1.5 shadow-[0_8px_30px_rgba(15,23,42,0.12)] backdrop-blur">
         {AGENTS.map((a) => {
           const isActive = active === a.id;
