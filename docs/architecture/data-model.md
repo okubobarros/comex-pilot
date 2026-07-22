@@ -16,7 +16,7 @@ _Deriva das entidades do PRD (§4.4) e das fontes reais (`tax_calc.xlsx`, Tabela
 obrigação de infraestrutura. Modelar norma↔norma e NCM↔anuência como tabelas de relação versionadas
 entrega 80% do valor (citação, vigência, dependência) sem operar um segundo banco. Reavaliar na Fase 2/3.
 
-**Infra já existente:** projeto Supabase `cpzjxgcekxyunktmcmay` — contém as tabelas de **outro app**
+**Infra já existente:** o Supabase existente (o mesmo do fluxo n8n legado) — contém as tabelas de **outro app**
 (`dossies`, `documentos`, `icms_uf`, …), que **não devem ser tocadas**. Por isso todo o schema novo
 vive no schema isolado **`mcat`** (não no `public`). Ver [../ops/sprint-0.md](../ops/sprint-0.md).
 O fluxo n8n legado não será reaproveitado nem rotacionado (decisão do CEO;

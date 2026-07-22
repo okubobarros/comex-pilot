@@ -33,7 +33,7 @@ anon lê `ncm` (RLS+grant); reaplicar o ETL não duplica (idempotente).
 2. Pegue a **connection string direta** do Supabase (Settings → Database → Connection string →
    `URI`, modo *session*; a porta 5432, não o pooler 6543 para ETL):
    ```bash
-   export DATABASE_URL="postgres://postgres:[SENHA]@db.cpzjxgcekxyunktmcmay.supabase.co:5432/postgres"
+   export DATABASE_URL="postgres://postgres:[SENHA]@db.[SEU-PROJETO-REF].supabase.co:5432/postgres"
    ```
 3. Rode:
    ```bash

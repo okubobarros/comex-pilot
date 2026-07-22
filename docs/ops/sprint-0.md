@@ -37,7 +37,7 @@ Tudo é idempotente (`IF NOT EXISTS` / `ON CONFLICT DO NOTHING`) — reaplicar n
 
 ## ⚠️ Usando o Supabase existente (projeto com outro app)
 
-O projeto escolhido (`cpzjxgcekxyunktmcmay`) contém as tabelas de outro produto — **não apagar
+O projeto escolhido (o Supabase existente, do fluxo legado) contém as tabelas de outro produto — **não apagar
 nada**. O isolamento por schema `mcat` já cuida da convivência. Só é preciso:
 
 1. **Expor o schema na API:** Supabase → **Settings → API → Exposed schemas** → adicionar `mcat`.
