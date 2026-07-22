@@ -17,6 +17,7 @@ import LiMinutaModal from './components/LiMinutaModal';
 import TopBar from './components/os/TopBar';
 import AgentDock, { AgentId } from './components/os/AgentDock';
 import { DateProvider } from './context/DateContext';
+import { ProcessProvider, Processo } from './context/ProcessContext';
 
 const CHAT_THOUGHTS = [
   '🔍 Lendo documento...',
@@ -385,8 +386,12 @@ export default function App() {
     : chatIntent === 'classify' ? 'ncm'
     : 'audit';
 
+  // Abre um processo do Kanban carregando o agente responsável.
+  const openProcess = (p: Processo) => onSelectAgent(p.agente);
+
   return (
     <DateProvider>
+    <ProcessProvider>
     <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white" id="comexpilot-app-root">
 
       <TopBar />
@@ -395,7 +400,7 @@ export default function App() {
       <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} />
 
       {view === 'home' ? (
-        <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} />
+        <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} onOpenProcess={openProcess} />
       ) : (
         <>
           {/* Coluna do chat com colapso animado: largura controlada aqui, conteúdo com largura mínima fixa para não amassar durante a transição */}
@@ -458,6 +463,7 @@ export default function App() {
       )}
 
     </div>
+    </ProcessProvider>
     </DateProvider>
   );
 }
