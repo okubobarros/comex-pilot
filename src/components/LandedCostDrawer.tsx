@@ -12,7 +12,9 @@ import { ArrowLeft, ArrowRight, Calculator, Check, RefreshCw, Sparkles, Wand2, X
 import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
+import { computeCosting } from '../engine/costing';
 import type { CostingResult, CostingRates } from '../engine/costing';
+import { resolveRatesLocal } from '../engine/offline';
 import { useReformaDate } from '../context/DateContext';
 import { useEvidence } from '../context/EvidenceContext';
 import CostingCanvas from './costing/CostingCanvas';
@@ -64,10 +66,23 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
     setPtaxLoading(true);
     try {
       const resp = await fetch('/api/ptax');
-      const data = await resp.json();
+      const data = resp.ok ? await resp.json() : { success: false };
       if (data.success) {
         setInputs((prev) => ({ ...prev, usdBrl: data.usdBrl }));
         setPtaxDate(data.date);
+        return;
+      }
+      // Fallback (produção estática): chama a PTAX do BCB direto do navegador.
+      for (let i = 0; i < 6; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const mmddyyyy = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${d.getFullYear()}`;
+        try {
+          const r = await fetch(`https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@d)?@d='${mmddyyyy}'&$format=json`);
+          const j = await r.json();
+          const v = j?.value?.[0]?.cotacaoVenda;
+          if (v) { setInputs((prev) => ({ ...prev, usdBrl: v })); setPtaxDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`); return; }
+        } catch { /* tenta o dia anterior */ }
       }
     } catch {
       /* mantém o valor manual */
@@ -82,7 +97,33 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   // Deriva a UF a partir do porto de entrada (ex.: "Santos (SP)" → "SP").
   const ufFromPort = (p: string) => p.match(/\(([A-Z]{2})\)/)?.[1] ?? 'SP';
 
-  // Roda o cálculo local (estimativa) + consulta o motor real (alíquotas do banco).
+  // Aplica um resultado de custeio (do backend ou do fallback local) na UI + trilha.
+  const applyCosting = (result: CostingResult, r: CostingRates, origem: string) => {
+    setEngine(result);
+    setEngineRates(r);
+    setEvidence({
+      agent: 'costing',
+      titulo: `Custeio · NCM ${inputs.ncm || '—'} · ${fase.label}`,
+      steps: [
+        `Resolvi as alíquotas do NCM (${origem}): II ${r.iiPct}% · IPI ${r.ipiPct}% · PIS ${r.pisPct}% · COFINS ${r.cofinsPct}%.`,
+        `ICMS ${r.icmsPct}% (UF de ${inputs.entryPort}) calculado "por dentro"; AFRMM ${r.afrmmPct}% e Taxa Siscomex aplicados.`,
+        `Regra IBS/CBS vigente em ${fase.label}: CBS ${r.reforma.cbsPct}% + IBS ${r.reforma.ibsPct}% ${r.reforma.cbsCompensavel ? '(compensáveis)' : '(impacto de caixa)'}.`,
+      ],
+      citations: [{ ref: 'LC 214/2025', nota: r.reforma.baseLegal }, { ref: 'Decreto 12.955/2026', nota: 'Base de cálculo do CBS/IBS (art. 13).' }],
+    });
+  };
+
+  // Fallback client-side (produção estática sem backend): mesmos dados reais embutidos.
+  const computeLocal = () => {
+    const r = resolveRatesLocal(inputs.ncm, ufFromPort(inputs.entryPort), dataFatoGerador);
+    const result = computeCosting(
+      { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl },
+      r,
+    );
+    applyCosting(result, r, 'base local');
+  };
+
+  // Consulta o motor real (alíquotas do banco); se indisponível, calcula localmente.
   const calcular = async () => {
     setShowResult(true);
     setEngine(null); setEngineErr(null); setEngineLoading(true);
@@ -97,24 +138,11 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
           dataFatoGerador,
         }),
       });
-      const data = await resp.json();
-      if (data.success) {
-        setEngine(data.result);
-        setEngineRates(data.rates);
-        const r = data.rates;
-        setEvidence({
-          agent: 'costing',
-          titulo: `Custeio · NCM ${inputs.ncm || '—'} · ${fase.label}`,
-          steps: [
-            `Resolvi as alíquotas reais do NCM: II ${r.iiPct}% · IPI ${r.ipiPct}% · PIS ${r.pisPct}% · COFINS ${r.cofinsPct}%.`,
-            `ICMS ${r.icmsPct}% (UF de ${inputs.entryPort}) calculado "por dentro"; AFRMM ${r.afrmmPct}% e Taxa Siscomex aplicados.`,
-            `Regra IBS/CBS vigente em ${fase.label}: CBS ${r.reforma.cbsPct}% + IBS ${r.reforma.ibsPct}% ${r.reforma.cbsCompensavel ? '(compensáveis)' : '(impacto de caixa)'}.`,
-          ],
-          citations: [{ ref: 'LC 214/2025', nota: r.reforma.baseLegal }, { ref: 'Decreto 12.955/2026', nota: 'Base de cálculo do CBS/IBS (art. 13).' }],
-        });
-      } else setEngineErr(data.error || 'Motor indisponível.');
+      const data = resp.ok ? await resp.json() : { success: false };
+      if (data.success) applyCosting(data.result, data.rates, 'banco');
+      else computeLocal();
     } catch {
-      setEngineErr('Falha ao contatar o motor de custeio.');
+      computeLocal();
     } finally {
       setEngineLoading(false);
     }

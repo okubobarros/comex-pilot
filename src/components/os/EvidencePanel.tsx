@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Brain, ChevronRight, Loader2, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useEvidence } from '../../context/EvidenceContext';
+import { normaLocal } from '../../engine/offline';
 
 interface NormaData {
   identificacao: string;
@@ -30,10 +31,10 @@ export default function EvidencePanel() {
     setCache((c) => ({ ...c, [ref]: 'loading' }));
     try {
       const resp = await fetch(`/api/norma?ref=${encodeURIComponent(ref)}`);
-      const data = await resp.json();
-      setCache((c) => ({ ...c, [ref]: data.success ? data.norma : 'erro' }));
+      const data = resp.ok ? await resp.json() : { success: false };
+      setCache((c) => ({ ...c, [ref]: data.success ? data.norma : (normaLocal(ref) ?? 'erro') }));
     } catch {
-      setCache((c) => ({ ...c, [ref]: 'erro' }));
+      setCache((c) => ({ ...c, [ref]: normaLocal(ref) ?? 'erro' }));
     }
   };
 

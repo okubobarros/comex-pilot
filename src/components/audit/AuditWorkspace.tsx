@@ -11,6 +11,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, FileSignature, Loader2, Download, PenLine, ShieldAlert, TrendingUp } from 'lucide-react';
 import { AuditAlert, InvoiceAnalysis, InvoiceItem } from '../../types';
+import { normaLocal } from '../../engine/offline';
 
 interface AuditWorkspaceProps {
   analysis: InvoiceAnalysis;
@@ -48,9 +49,9 @@ export default function AuditWorkspace({ analysis, onGenerateLi, onAlertInquire 
     setNorma((n) => ({ ...n, [ref]: 'loading' }));
     try {
       const r = await fetch(`/api/norma?ref=${encodeURIComponent(ref)}`);
-      const d = await r.json();
-      setNorma((n) => ({ ...n, [ref]: d.success ? d.norma : 'erro' }));
-    } catch { setNorma((n) => ({ ...n, [ref]: 'erro' })); }
+      const d = r.ok ? await r.json() : { success: false };
+      setNorma((n) => ({ ...n, [ref]: d.success ? d.norma : (normaLocal(ref) ?? 'erro') }));
+    } catch { setNorma((n) => ({ ...n, [ref]: normaLocal(ref) ?? 'erro' })); }
   };
 
   const gerarMinuta = (item: InvoiceItem) => {
