@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, Calculator, Check, Sparkles, Wand2, X } from 'lu
 import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
+import type { CostingResult, CostingRates } from '../engine/costing';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
@@ -45,6 +46,37 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [dragOver, setDragOver] = useState(false);
   const [prefillNote, setPrefillNote] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [engine, setEngine] = useState<CostingResult | null>(null);
+  const [engineRates, setEngineRates] = useState<CostingRates | null>(null);
+  const [engineErr, setEngineErr] = useState<string | null>(null);
+  const [engineLoading, setEngineLoading] = useState(false);
+
+  // Deriva a UF a partir do porto de entrada (ex.: "Santos (SP)" → "SP").
+  const ufFromPort = (p: string) => p.match(/\(([A-Z]{2})\)/)?.[1] ?? 'SP';
+
+  // Roda o cálculo local (estimativa) + consulta o motor real (alíquotas do banco).
+  const calcular = async () => {
+    setShowResult(true);
+    setEngine(null); setEngineErr(null); setEngineLoading(true);
+    try {
+      const resp = await fetch('/api/costing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ncm: inputs.ncm, uf: ufFromPort(inputs.entryPort), modal: 'longo_curso',
+          qtdeAdicoes: 1, fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd,
+          insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success) { setEngine(data.result); setEngineRates(data.rates); }
+      else setEngineErr(data.error || 'Motor indisponível.');
+    } catch {
+      setEngineErr('Falha ao contatar o motor de custeio.');
+    } finally {
+      setEngineLoading(false);
+    }
+  };
 
   const set = <K extends keyof LandedCostInputs>(key: K, value: LandedCostInputs[K]) =>
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -250,7 +282,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
               </div>
 
               <button
-                onClick={() => setShowResult(true)}
+                onClick={calcular}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
               >
                 <Calculator className="h-4 w-4" />
@@ -291,8 +323,61 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
                   </div>
 
                   <p className="text-[11px] leading-relaxed text-slate-400">
-                    Estimativa preventiva com ICMS calculado "por dentro". Valores de AFRMM, SISCOMEX e despachante não inclusos. Confirme as alíquotas na TEC e na legislação estadual do porto de {inputs.entryPort}.
+                    Estimativa local com ICMS "por dentro". O bloco abaixo usa o <strong>motor de custeio com alíquotas reais</strong> do banco (NCM/UF/data) e inclui AFRMM, Siscomex e a Reforma (IBS/CBS).
                   </p>
+
+                  {/* Motor de custeio real (alíquotas do schema mcat) */}
+                  {engineLoading && (
+                    <div className="rounded-lg bg-white px-3 py-2 text-[11px] text-slate-500">Consultando alíquotas reais…</div>
+                  )}
+                  {engineErr && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                      Motor real indisponível: {engineErr} — mostrando apenas a estimativa local acima.
+                    </div>
+                  )}
+                  {engine && (
+                    <div className="space-y-2.5 rounded-xl border border-indigo-200 bg-white p-3" id="engine-result">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+                          <Sparkles className="h-3.5 w-3.5" /> Motor de custeio · alíquotas reais (mcat)
+                        </span>
+                        {engineRates && (
+                          <span className="font-mono text-[10px] text-slate-400">
+                            II {engineRates.iiPct}% · IPI {engineRates.ipiPct}% · PIS {engineRates.pisPct}% · COFINS {engineRates.cofinsPct}% · ICMS {engineRates.icmsPct}% · AFRMM {engineRates.afrmmPct}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                        {[
+                          ['II', brl(engine.ii)], ['IPI', brl(engine.ipi)], ['PIS', brl(engine.pis)], ['COFINS', brl(engine.cofins)],
+                          ['AFRMM', brl(engine.afrmm)], ['Siscomex', brl(engine.siscomex)], ['ICMS', brl(engine.icms)], ['VMLD', brl(engine.vmld)],
+                        ].map(([k, v]) => (
+                          <div key={k} className="flex justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
+                            <span className="text-slate-500">{k}</span>
+                            <span className="font-mono text-xs font-semibold text-slate-800">{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2.5 sm:grid-cols-3">
+                        <div className="rounded-xl bg-slate-900 px-3 py-2.5 text-white">
+                          <span className="block text-[10px] uppercase tracking-wider text-slate-400">CTI (desembolso as-is)</span>
+                          <span className="font-mono text-base font-semibold">{brl(engine.ctiAsIs)}</span>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                          <span className="block text-[10px] uppercase tracking-wider text-slate-400">IBS/CBS a declarar</span>
+                          <span className="font-mono text-base font-semibold text-slate-800">{brl(engine.cbsDeclarar + engine.ibsDeclarar)}</span>
+                          <span className="ml-1 font-mono text-[10px] text-slate-400">CBS {brl(engine.cbsDeclarar)} · IBS {brl(engine.ibsDeclarar)}</span>
+                        </div>
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                          <span className="block text-[10px] uppercase tracking-wider text-emerald-600">Impacto de caixa CBS/IBS</span>
+                          <span className="font-mono text-base font-semibold text-emerald-700">{brl(engine.impactoCaixaNovos)}</span>
+                          {engine.impactoCaixaNovos === 0 && (
+                            <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700">compensável</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

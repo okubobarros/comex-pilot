@@ -9,11 +9,15 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { COSMETICS_DATABASE } from "./src/data/cosmeticsDb";
+import { costingHandler } from "./server/costingService";
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Motor de custeio (as-is + IBS/CBS) sobre alíquotas reais do schema mcat.
+app.post("/api/costing", costingHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

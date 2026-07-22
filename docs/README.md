@@ -18,6 +18,7 @@ aduaneira e tributária) e do **ComexPilot** (o app que a materializa).
 | [data/ncm-tax-base.md](data/ncm-tax-base.md) | Como a base NCM e as tabelas de tributos viram tabelas + pipeline de ingestão |
 | [data/data-acquisition-checklist.md](data/data-acquisition-checklist.md) | **Checklist do CEO:** tudo que falta levantar para carregar dado real, por prioridade |
 | [data/incoming-artifacts-analysis.md](data/incoming-artifacts-analysis.md) | Triagem do lote de artefatos recebidos: o que serve, é parcial, descartar, e o que falta |
+| [data/aliquotas-e-custos-cti.md](data/aliquotas-e-custos-cti.md) | De onde vem cada alíquota, dúvidas p/ tributarista, e por que a tax_calc não é a planilha do Custos CTI |
 | [ops/n8n-flows-audit.md](ops/n8n-flows-audit.md) | Fluxos n8n legados (referência de lógica) + proposta de melhoria que os substitui |
 | [ops/sprint-0.md](ops/sprint-0.md) | Sprint 0 entregue: schema + seeds do piloto cosmético, como aplicar e evidência de validação |
 | [ops/sprint-1.md](ops/sprint-1.md) | Sprint 1 (parcial): ETL da base real (NCM 15k + tributos + referência), como rodar e validação |

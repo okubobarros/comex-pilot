@@ -51,12 +51,13 @@ risco. Sprints de ~1–2 semanas; ajustar à capacidade real do time._
 - [x] Tabelas `ibs_cbs_regra` + seed 2026 (0,9% CBS / 0,1% IBS, compensável) — Sprint 0.
 - [x] Função pura `computeCosting(...)` versionada por regra da data — `src/engine/costing.ts`.
 - [x] Teste executável (`npm run test:costing`): caso 2026 à mão, fase 2027, AFRMM. Todos passam.
-- [ ] Reconciliar com o número exato do PRD (R$ 104.770,34) — precisa das premissas originais.
-- [ ] Resolver de alíquotas a partir de `mcat.*` (por NCM/UF/data) + endpoint `POST /api/costing`.
-- [ ] `LandedCostDrawer` consome o endpoint: linha "IBS/CBS a declarar" + selo "compensável".
-- [ ] Validar base de cálculo CBS/IBS (art. 13) com o tributarista.
+- [x] Resolver de alíquotas a partir de `mcat.*` (por NCM/UF/data) — `server/costingService.ts`.
+- [x] Endpoint `POST /api/costing` — verificado contra Postgres real com dado carregado.
+- [x] `LandedCostDrawer` consome o endpoint: bloco com alíquotas reais + "IBS/CBS a declarar" + selo "compensável". Verificado no preview.
+- [ ] Reconciliar com o número exato do PRD (R$ 104.770,34) — precisa das premissas originais ([../data/aliquotas-e-custos-cti.md](../data/aliquotas-e-custos-cti.md)).
+- [ ] Validar base de cálculo CBS/IBS (art. 13) e adicional COFINS-Imp com o tributarista.
 
-**Entrega parcial:** motor puro validado; falta o resolver DB + endpoint + wiring na UI.
+**Entrega:** motor ligado ao banco e à UI, verificado ponta a ponta. Falta reconciliar o número do PRD e validar bases com tributarista.
 
 ## Sprint 4 — Roteamento dinâmico + RAG com citação
 
