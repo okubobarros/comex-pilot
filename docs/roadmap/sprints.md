@@ -26,7 +26,8 @@ risco. Sprints de ~1–2 semanas; ajustar à capacidade real do time._
 - [x] Normalização (vírgula→ponto, `Sim/Não`→bool, sentinela `9999`); FK-safe (tributo só de NCM existente).
 - [x] `orgao_anuente` semeado (Sprint 0) + `ncm_anuencia` cosmético (Sprint 0).
 - [ ] **Você:** rodar o ETL contra o Supabase (`DATABASE_URL`). Ver [ops/sprint-1.md](../ops/sprint-1.md).
-- [ ] `sync_ptax.py` — câmbio contínuo via API BCB.
+- [x] Câmbio ao vivo via API BCB (`GET /api/ptax`) + auto-preenchimento no LandedCostDrawer (selo "PTAX ao vivo"). Verificado no preview (5,078 em 21/07; fallback de fim de semana ok).
+- [ ] `sync_ptax.py` — persistir a série em `cambio_ptax` (hoje é on-demand).
 - [ ] Parsing de `Tratamentos Administrativos` → `ncm_anuencia` para além do cosmético.
 - [ ] Registro de carga em `event_log`.
 

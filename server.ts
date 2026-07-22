@@ -10,6 +10,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { COSMETICS_DATABASE } from "./src/data/cosmeticsDb";
 import { costingHandler } from "./server/costingService";
+import { ptaxHandler } from "./server/ptaxService";
 
 dotenv.config();
 
@@ -18,6 +19,8 @@ app.use(express.json());
 
 // Motor de custeio (as-is + IBS/CBS) sobre alíquotas reais do schema mcat.
 app.post("/api/costing", costingHandler);
+// Câmbio PTAX ao vivo (API pública do Banco Central).
+app.get("/api/ptax", ptaxHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

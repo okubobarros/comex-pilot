@@ -7,8 +7,8 @@
  * de uma Invoice no topo para pré-preencher os campos estruturados.
  */
 
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Calculator, Check, Sparkles, Wand2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, Calculator, Check, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
@@ -50,6 +50,28 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [engineRates, setEngineRates] = useState<CostingRates | null>(null);
   const [engineErr, setEngineErr] = useState<string | null>(null);
   const [engineLoading, setEngineLoading] = useState(false);
+  const [ptaxDate, setPtaxDate] = useState<string | null>(null);
+  const [ptaxLoading, setPtaxLoading] = useState(false);
+
+  // Busca a PTAX do dia na API do BCB e preenche o câmbio automaticamente.
+  const fetchPtax = async () => {
+    setPtaxLoading(true);
+    try {
+      const resp = await fetch('/api/ptax');
+      const data = await resp.json();
+      if (data.success) {
+        setInputs((prev) => ({ ...prev, usdBrl: data.usdBrl }));
+        setPtaxDate(data.date);
+      }
+    } catch {
+      /* mantém o valor manual */
+    } finally {
+      setPtaxLoading(false);
+    }
+  };
+
+  // Puxa a PTAX ao abrir a skill (efeito de "dado ao vivo").
+  useEffect(() => { fetchPtax(); }, []);
 
   // Deriva a UF a partir do porto de entrada (ex.: "Santos (SP)" → "SP").
   const ufFromPort = (p: string) => p.match(/\(([A-Z]{2})\)/)?.[1] ?? 'SP';
@@ -268,8 +290,26 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
                 <input type="number" className={`${inputClass} font-mono`} value={inputs.icmsRate || ''} onChange={num('icmsRate')} />
               </div>
               <div>
-                <label className={labelClass}>Câmbio USD → BRL</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className={`${labelClass} mb-0`}>Câmbio USD → BRL</label>
+                  <button
+                    type="button"
+                    onClick={fetchPtax}
+                    disabled={ptaxLoading}
+                    title="Buscar PTAX do dia no Banco Central"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${ptaxLoading ? 'animate-spin' : ''}`} />
+                    PTAX
+                  </button>
+                </div>
                 <input type="number" className={`${inputClass} font-mono`} value={inputs.usdBrl || ''} onChange={num('usdBrl')} />
+                {ptaxDate && (
+                  <span className="mt-1 flex items-center gap-1 text-[10px] text-emerald-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    PTAX ao vivo · BCB · {new Date(ptaxDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                )}
               </div>
             </div>
           )}
