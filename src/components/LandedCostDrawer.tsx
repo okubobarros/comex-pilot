@@ -15,6 +15,7 @@ import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
 import type { CostingResult, CostingRates } from '../engine/costing';
 import { useReformaDate } from '../context/DateContext';
 import { useEvidence } from '../context/EvidenceContext';
+import CostingCanvas from './costing/CostingCanvas';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
@@ -47,6 +48,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [rawData, setRawData] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [prefillNote, setPrefillNote] = useState<string | null>(null);
+  const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
   const [engine, setEngine] = useState<CostingResult | null>(null);
   const [engineRates, setEngineRates] = useState<CostingRates | null>(null);
@@ -146,6 +148,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
       quantity: item.quantity,
       iiRate: rule?.standardIiRate ?? prev.iiRate
     }));
+    setAiFilled(new Set(['productDescription', 'ncm', 'origin', 'fobUsd', 'quantity', 'iiRate']));
     setPrefillNote(`Campos pré-preenchidos a partir dos dados brutos: ${item.description} (NCM ${item.ncm}). Ajuste antes de calcular.`);
     setShowResult(false);
   };
@@ -231,6 +234,17 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
             </div>
           )}
         </div>
+
+        {/* Canvas de custeio (dados brutos · sugestão IA · reconciliação) */}
+        {prefillNote && (
+          <CostingCanvas
+            rawText={rawData}
+            inputs={inputs}
+            rates={engineRates}
+            aiFilled={aiFilled}
+            onAcceptFreight={(usd) => set('freightUsd', usd)}
+          />
+        )}
 
         {/* Stepper */}
         <div className="mb-5 flex items-center gap-2">
