@@ -59,18 +59,33 @@ se regra.ipi_zerado == true (e não ZFM):  IPI = 0
 
 > Percentuais de 2027+ a confirmar com tributarista antes de semear (o PRD marca isso como pendência).
 
-## Validação de referência (deve bater com o PRD)
+## Implementação (Sprint 3)
 
-Creme hidratante, NCM 3304.99.90, FOB US$10.000, fato gerador 2026:
+Motor implementado como **função pura** em [`src/engine/costing.ts`](../../src/engine/costing.ts)
+(`computeCosting(input, rates)`): determinística, sem I/O — as alíquotas já chegam resolvidas em
+`rates` (versionadas por data). Teste executável em [`scripts/test_costing.ts`](../../scripts/test_costing.ts):
 
-| Saída esperada | Valor |
-|---|---|
-| CTI (desembolso real, modelo atual) | R$ 104.770,34 |
-| CBS a declarar (0,9%) | R$ 524,28 |
-| IBS a declarar (0,1%) | R$ 58,25 |
-| Impacto de caixa adicional 2026 | R$ 0,00 (compensável) |
+```bash
+npm run test:costing
+```
 
-Este caso vira **teste de regressão** do motor (fixture em `docs/data` ou `tests/`).
+Cobre: caso cosmético 2026 (conferido à mão), fase 2027 sintética (PIS/COFINS extintos, IPI zerado,
+CBS/IBS ao caixa) e AFRMM sobre frete. **Todos passam.**
+
+### ⚠️ Base de cálculo do CBS/IBS — v1
+
+A base usada é **VMLD (valor aduaneiro)**. O Decreto 12.955/2026 art. 13 detalha a composição
+(inclui frete/seguro/tributos/taxas; exclui CBS/IBS e IPI) — a composição exata está **pendente de
+validação com o tributarista**. O campo `baseIbsCbs` é exposto no resultado para auditoria.
+
+## Reconciliação com o PRD (pendente de inputs)
+
+O PRD cita: creme 3304.99.90, FOB US$10.000, 2026 → CTI **R$ 104.770,34**, CBS R$ 524,28, IBS
+R$ 58,25. Reproduzir **ao centavo** exige as premissas exatas do PRD (câmbio, frete, seguro, UF/ICMS,
+nº de adições), que não estão no documento. Ex.: CBS 524,28 a 0,9% ⇒ base ≈ R$ 58.253 ⇒ câmbio ≈
+5,825 (se base = VMLD) — ou base maior a câmbio menor. **Ação:** obter a planilha/premissas originais
+do Custos CTI para fechar o número e virar teste de regressão oficial (ver
+[../data/data-acquisition-checklist.md](../data/data-acquisition-checklist.md)).
 
 ## Onde isso encaixa no app
 

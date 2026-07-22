@@ -44,17 +44,19 @@ risco. Sprints de ~1–2 semanas; ajustar à capacidade real do time._
 
 **Entrega:** o Veredito da Auditoria mostra números reais; processos ficam salvos.
 
-## Sprint 3 — Motor de custeio versionado (IBS/CBS) — item nº 1 do PRD
+## Sprint 3 — Motor de custeio versionado (IBS/CBS) — item nº 1 do PRD 🚧 EM ANDAMENTO
 
 **Objetivo:** custeio correto na Reforma Tributária.
 
-- [ ] Tabelas `ibs_cbs_regra` e `aliquota_ibs_cbs` + seed 2026 (0,9% CBS / 0,1% IBS, compensável).
-- [ ] Função `custeio(...)` versionada por `data_fato_gerador` ([architecture/costing-engine.md](../architecture/costing-engine.md)).
-- [ ] Teste de regressão com o caso do PRD (creme 3304.99.90, CTI R$ 104.770,34).
-- [ ] Endpoint `POST /api/costing`; `LandedCostDrawer` consome e mostra linha "IBS/CBS a declarar" + selo "compensável".
-- [ ] Atualizar o workflow n8n **Custos CTI** para a mesma lógica (revalidar contra o JSON real).
+- [x] Tabelas `ibs_cbs_regra` + seed 2026 (0,9% CBS / 0,1% IBS, compensável) — Sprint 0.
+- [x] Função pura `computeCosting(...)` versionada por regra da data — `src/engine/costing.ts`.
+- [x] Teste executável (`npm run test:costing`): caso 2026 à mão, fase 2027, AFRMM. Todos passam.
+- [ ] Reconciliar com o número exato do PRD (R$ 104.770,34) — precisa das premissas originais.
+- [ ] Resolver de alíquotas a partir de `mcat.*` (por NCM/UF/data) + endpoint `POST /api/costing`.
+- [ ] `LandedCostDrawer` consome o endpoint: linha "IBS/CBS a declarar" + selo "compensável".
+- [ ] Validar base de cálculo CBS/IBS (art. 13) com o tributarista.
 
-**Entrega:** custo de importação com IBS/CBS e flag de compensação, batendo com a simulação do PRD.
+**Entrega parcial:** motor puro validado; falta o resolver DB + endpoint + wiring na UI.
 
 ## Sprint 4 — Roteamento dinâmico + RAG com citação
 
