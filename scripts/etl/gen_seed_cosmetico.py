@@ -78,7 +78,8 @@ def main() -> None:
     out.append("-- ============================================================")
     out.append("-- Seed do piloto COSMÉTICO (gerado por scripts/etl/gen_seed_cosmetico.py)")
     out.append(f"-- {len(ncm_rows)} NCMs · fonte: data/sources/*.csv · NÃO editar à mão")
-    out.append("-- ============================================================\n")
+    out.append("-- ============================================================")
+    out.append("set search_path to mcat, public;\n")
 
     # 1) NCM
     out.append("-- NCM (cap. 33)")

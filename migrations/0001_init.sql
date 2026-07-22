@@ -2,7 +2,14 @@
 -- MCAT / ComexPilot — Migration base (Sprint 0)
 -- Cria o schema das 5 camadas descritas em docs/architecture/data-model.md
 -- Alvo: PostgreSQL 14+ (Supabase). Idempotente (IF NOT EXISTS / CREATE OR REPLACE).
+--
+-- Tudo vive no schema dedicado `mcat`, isolado do `public` (que pode conter
+-- tabelas de outro app). Para a API do Supabase enxergar: Settings > API >
+-- Exposed schemas > adicionar `mcat`. Ver docs/ops/sprint-0.md.
 -- ============================================================================
+
+create schema if not exists mcat;
+set search_path to mcat, public, extensions;
 
 create extension if not exists pgcrypto;   -- gen_random_uuid()
 create extension if not exists vector;     -- pgvector (RAG). Supabase já inclui.

@@ -3,6 +3,11 @@
 Schema + seeds do piloto cosmético, prontos para aplicar. **Validado num Postgres
 pgvector (pg16) real:** migration e seeds aplicam sem erro; contagens e JOINs conferem.
 
+> **Isolamento por schema `mcat`.** O projeto Supabase reusado contém as tabelas de **outro
+> app** (`dossies`, `documentos`, `erp_catalogo_itens`, `icms_uf`, …). Para não colidir nem tocar
+> nesses dados, **todo o schema novo vive em `mcat`**, separado do `public`. A migration cria o
+> schema e define `search_path`; cada seed repete o `set search_path to mcat, public;` no topo.
+
 ## O que foi criado
 
 ```
@@ -30,19 +35,21 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f seeds/0002_cosmetico.sql
 
 Tudo é idempotente (`IF NOT EXISTS` / `ON CONFLICT DO NOTHING`) — reaplicar não duplica.
 
-## ⚠️ Antes de usar o Supabase existente (projeto do fluxo legado)
+## ⚠️ Usando o Supabase existente (projeto com outro app)
 
-O projeto escolhido é o mesmo do fluxo n8n antigo (`cpzjxgcekxyunktmcmay`). Antes:
+O projeto escolhido (`cpzjxgcekxyunktmcmay`) contém as tabelas de outro produto — **não apagar
+nada**. O isolamento por schema `mcat` já cuida da convivência. Só é preciso:
 
-1. **Revisar/limpar objetos legados** (tabelas/RPC como `log_agent_usage`) que não fazem
-   parte deste schema, para evitar colisão.
-2. Confirmar que **pgvector** está habilitado (`create extension vector;` — Supabase suporta).
-3. As migrations criam tudo no schema `public`; ajuste se seu projeto usa outro.
+1. **Expor o schema na API:** Supabase → **Settings → API → Exposed schemas** → adicionar `mcat`.
+   No cliente supabase-js use `.schema('mcat')`; no backend com conexão direta, `search_path=mcat`.
+2. **pgvector** habilitado (Supabase já inclui; a migration faz `create extension if not exists`).
+3. Não é necessário limpar o `public` — `mcat` é totalmente isolado.
 
 ## Como validei (evidência)
 
-Container `pgvector/pgvector:pg16` descartável, aplicando os 3 arquivos com
-`ON_ERROR_STOP=1`. Resultado:
+Container `pgvector/pgvector:pg16` descartável, **reproduzindo a colisão real** (uma
+`public.icms_uf` legada sem PK), aplicando os 3 arquivos com `ON_ERROR_STOP=1`. Todas as 18
+tabelas foram criadas em `mcat`, a `public.icms_uf` legada ficou intocada, e:
 
 | tabela | linhas |
 |---|---|

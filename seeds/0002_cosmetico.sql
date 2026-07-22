@@ -2,6 +2,7 @@
 -- Seed do piloto COSMÉTICO (gerado por scripts/etl/gen_seed_cosmetico.py)
 -- 54 NCMs · fonte: data/sources/*.csv · NÃO editar à mão
 -- ============================================================
+set search_path to mcat, public;
 
 -- NCM (cap. 33)
 insert into ncm (codigo, descricao, nivel, vigencia_inicio) values ('3301.12.10', 'De petit grain', 8, date '2022-04-01') on conflict (codigo) do nothing;

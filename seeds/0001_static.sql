@@ -3,6 +3,8 @@
 -- Idempotente via ON CONFLICT.
 -- ============================================================================
 
+set search_path to mcat, public;
+
 -- Órgãos anuentes (fonte: aba consulta do tax_calc + app)
 insert into orgao_anuente (nome, tipo_exigencia) values
   ('ANVISA',  'Sanitário'),
