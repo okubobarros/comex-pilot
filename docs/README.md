@@ -23,6 +23,7 @@ aduaneira e tributária) e do **ComexPilot** (o app que a materializa).
 | [ops/sprint-0.md](ops/sprint-0.md) | Sprint 0 entregue: schema + seeds do piloto cosmético, como aplicar e evidência de validação |
 | [ops/sprint-1.md](ops/sprint-1.md) | Sprint 1 (parcial): ETL da base real (NCM 15k + tributos + referência), como rodar e validação |
 | [ops/sat-graph.md](ops/sat-graph.md) | Integração Neo4j (SAT-Graph): motor de conformidade por NCM — como conectar, rotas e caveat de produção |
+| [ops/deploy.md](ops/deploy.md) | Deploy na Vercel: API serverless + variáveis de ambiente a cadastrar |
 | [roadmap/sprints.md](roadmap/sprints.md) | Plano de sprints derivado do roadmap do PRD |
 
 ## Como reproduzir "a ideia do app real"

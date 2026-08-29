@@ -60,8 +60,9 @@ atual da Vercel **não serve `/api/*`**, então a Conformidade só funciona:
 - em **dev local** (`npm run dev`), ou
 - num **deploy que rode o servidor Node** (ou uma serverless function que exponha as rotas).
 
-Para produção, o passo seguinte é publicar o `server.ts` como função/serviço na Vercel (ou outro
-host Node) com as variáveis `NEO4J_*` no ambiente.
+**Resolvido:** o `server.ts` agora exporta o app Express e `api/index.ts` o expõe como função
+serverless da Vercel (`vercel.json` roteia `/api/*` para ela e o resto para o SPA). Falta só
+cadastrar as variáveis no painel da Vercel — ver `docs/ops/deploy.md`.
 
 ## ⚠️ Gotcha nº 3 — credencial do CONSOLE ≠ credencial do BANCO
 

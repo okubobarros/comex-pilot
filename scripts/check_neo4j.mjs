@@ -22,9 +22,20 @@ if (user.includes('@')) {
 }
 
 const d = neo4j.driver(uri, neo4j.auth.basic(user, pass));
+// O nome do database varia: no Aura Free costuma ser "neo4j", mas algumas
+// instâncias usam o próprio id. Testamos os dois antes de desistir.
+const instanceId = (uri.match(/\/\/([^.]+)\./) || [])[1];
+const candidatos = [...new Set([db, 'neo4j', instanceId].filter(Boolean))];
 try {
   const info = await d.getServerInfo();
-  const s = d.session({ database: db });
+  let s, usado;
+  for (const cand of candidatos) {
+    try { const t = d.session({ database: cand }); await t.run('RETURN 1'); s = t; usado = cand; break; }
+    catch { /* tenta o próximo */ }
+  }
+  if (!s) throw new Error('Nenhum database acessível: ' + candidatos.join(', '));
+  if (usado !== db) console.log(`
+⚠️  DATABASE correto é "${usado}" (o .env tem "${db}") — ajuste NEO4J_DATABASE.`);
   const r = await s.run('MATCH (n) RETURN count(n) AS total');
   const labels = await s.run('MATCH (n) RETURN labels(n)[0] AS label, count(n) AS t ORDER BY t DESC LIMIT 5');
   await s.close();

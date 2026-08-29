@@ -5,7 +5,6 @@
 
 import express, { Request, Response } from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { COSMETICS_DATABASE } from "./src/data/cosmeticsDb";
@@ -647,6 +646,7 @@ function calculateRiskScore(alerts: any[]): number {
 // Vite Integration for Full-Stack development / Production assets
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -670,4 +670,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// Na Vercel o app roda como função serverless (api/index.ts); localmente, escuta a porta.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

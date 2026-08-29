@@ -32,12 +32,36 @@ function normalize(value: unknown): unknown {
   return value;
 }
 
+let resolvedDb: string | null = null;
+
+/** Descobre o database acessível (NEO4J_DATABASE > "neo4j" > id da instância). */
+async function resolveDatabase(d: Driver): Promise<string> {
+  if (resolvedDb) return resolvedDb;
+  const uri = process.env.NEO4J_URI || '';
+  const instanceId = (uri.match(/\/\/([^.]+)\./) || [])[1];
+  const candidatos = [...new Set([process.env.NEO4J_DATABASE, 'neo4j', instanceId].filter(Boolean))] as string[];
+  for (const cand of candidatos) {
+    const s = d.session({ database: cand, defaultAccessMode: neo4j.session.READ });
+    try {
+      await s.run('RETURN 1');
+      resolvedDb = cand;
+      return cand;
+    } catch {
+      /* tenta o próximo */
+    } finally {
+      await s.close();
+    }
+  }
+  return candidatos[0] || 'neo4j';
+}
+
 /** Executa um Cypher de leitura e devolve as linhas como objetos. */
 export async function query(cypher: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>[]> {
   const d = getDriver();
   if (!d) throw new Error('Neo4j não configurado (defina NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD).');
-  // Aura Free: o database chama-se "neo4j" (o id 785150a4 é a instância, não o db).
-  const database = process.env.NEO4J_DATABASE || 'neo4j';
+  // O nome do database varia por instância: no Aura Free costuma ser "neo4j",
+  // mas algumas usam o próprio id. Resolvemos uma vez e memorizamos.
+  const database = await resolveDatabase(d);
   const session = d.session({ database, defaultAccessMode: neo4j.session.READ });
   try {
     const res = await session.executeRead((tx) => tx.run(cypher, params));
