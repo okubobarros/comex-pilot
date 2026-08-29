@@ -133,6 +133,40 @@ navegador — dá para rodar Cypher lá mesmo sem a senha do banco. Use
 `scripts/cypher/validacao_sat_graph.cypher` para conferir labels/propriedades
 reais antes de ligar o app.
 
+## Modelo real do grafo (validado em 29/08/2026)
+
+O prompt de integração descrevia um schema que **não corresponde** a esta carga.
+O que vale é o seguinte (descoberto por inspeção da instância `c36586f0`):
+
+| Item | Realidade |
+|---|---|
+| Id do NCM | `NCM_CODE_<code_canonical>` — ex.: `NCM_CODE_33049990` |
+| Propriedades de `NCMCode` | `id`, `code_canonical`, `code_domain`, `quality_status` — **não existe** `code`/`descricao` |
+| Descrição do NCM | vive em `NCMOccurrence` (`description_plain`, `code_display`), ligada por `code_canonical` |
+| Relação | `(TreatmentRule)-[:APLICA_SOBRE]->(:NCMCode)` ✔ como esperado |
+
+**Cada órgão tem um schema próprio** — por isso `server/satGraph.ts` normaliza:
+
+| Órgão | Campos característicos |
+|---|---|
+| DECEX/INMETRO/IBAMA | padrão NPI: `orgao_anuente`, `ta_id`, `tipo_ta`, `impede_desembaraco`, `base_legal_ta` |
+| ANVISA | `categoria_regulatoria`, `fundamentacao_legal`, `lpco_unico`, `duimp`, `inspecao` (sem `ta_id`) |
+| MAPA | `descricao`, `ncm_scope`, `procedimento_i/ii/iii` (sem `ta_id`) |
+
+O nome do órgão é derivado do **label** do nó (sempre confiável) quando
+`orgao_anuente` não existe — ver `orgaoDoLabel()`.
+
+⚠️ **A NCM do grafo é a vigente (Res. Gecex 272/2021).** Códigos de versões
+antigas não existem — ex.: `3002.30.60` (usado como exemplo no prompt) retorna
+vazio; os códigos atuais de 3002 são `3002.12.11`, `3002.12.12` etc.
+
+### NCMs bons para demonstração
+| NCM | O que traz |
+|---|---|
+| `2933.39.99` | **6 órgãos**, 15 tratamentos (ANVISA, DECEX, DFPC, DPF, MAPA, MCTI) |
+| `8479.89.99` | 5 órgãos, 24 regras |
+| `3304.99.90` | cosmético do piloto — ANVISA |
+
 ## Regras (do prompt de integração)
 - Não criar nós `NCMCode` nem rodar seeds/migrações no grafo (é produção).
 - Não commitar `.env` com a senha. Não alterar constraints/índices no Neo4j.

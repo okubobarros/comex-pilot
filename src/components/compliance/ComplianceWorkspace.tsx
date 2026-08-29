@@ -36,7 +36,7 @@ const impedeBadge = (v?: string) => {
 };
 
 export default function ComplianceWorkspace({ onClose }: { onClose: () => void }) {
-  const [ncm, setNcm] = useState('30023060');
+  const [ncm, setNcm] = useState('2933.39.99');
   const [data, setData] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +85,7 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
             value={ncm}
             onChange={(e) => setNcm(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') consultar(); }}
-            placeholder="NCM (ex.: 3002.30.60 · vacina; 8470.90.10 · máq. franquear)"
+            placeholder="NCM (ex.: 2933.39.99 · 6 órgãos; 3304.99.90 · cosmético ANVISA)"
             className="min-w-0 flex-1 bg-transparent px-1 py-1.5 font-mono text-sm text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-sans"
           />
           <button onClick={consultar} disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-teal-500 disabled:opacity-50">
@@ -156,7 +156,7 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
         )}
 
         {!data && !erro && !loading && (
-          <p className="text-xs text-slate-400">Digite um NCM e clique em Consultar. Exemplos: 3002.30.60 (vacina · MAPA), 8470.90.10 (ECT), 7102.10.00 (diamante · ANM).</p>
+          <p className="text-xs text-slate-400">Digite um NCM e clique em Consultar. Exemplos: 2933.39.99 (6 órgãos anuentes), 3304.99.90 (cosmético · ANVISA), 8479.89.99 (24 regras).</p>
         )}
       </div>
     </section>

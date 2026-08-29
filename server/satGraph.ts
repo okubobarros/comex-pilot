@@ -4,61 +4,86 @@
  *
  * Consultas do SAT-Graph (motor de conformidade aduaneira sobre o Neo4j).
  * SOMENTE LEITURA — não cria nem altera nós/relações (o grafo é de produção).
- * Modelo: (TreatmentRule)-[:APLICA_SOBRE]->(:NCMCode). O identificador do NCM
- * varia por carga (código puro ou prefixado) — ver ncmVariants abaixo.
+ *
+ * Modelo real (validado na instância c36586f0):
+ *   (:NCMCode {id:"NCM_CODE_<code_canonical>", code_canonical})
+ *   (TreatmentRule)-[:APLICA_SOBRE]->(:NCMCode)
+ *   (:NCMOccurrence {code_canonical, code_display, description_plain})
+ *
+ * IMPORTANTE: cada órgão foi carregado com um schema próprio — DECEX segue o
+ * padrão NPI (ta_id, tipo_ta, impede_desembaraco), ANVISA usa
+ * categoria_regulatoria/fundamentacao_legal/lpco_unico, MAPA usa
+ * descricao/procedimento_*. Por isso normalizamos aqui, derivando o órgão do
+ * label (sempre confiável) e mapeando os campos equivalentes.
  */
 import { query } from './neo4j';
 
+/** Label do nó → nome do órgão anuente. */
+const ORGAO_POR_LABEL: Record<string, string> = {
+  AnvisaTreatmentRule: 'ANVISA',
+  MAPATreatmentRule: 'MAPA',
+  MapaTreatmentRule: 'MAPA',
+  IbamaTreatmentRule: 'IBAMA',
+  InmetroTreatmentRule: 'INMETRO',
+  DecexTreatmentRule: 'DECEX',
+  SecexTreatmentRule: 'SECEX',
+  DpfTreatmentRule: 'DPF/SIPROQUIM',
+  DfpcTreatmentRule: 'DFPC (Exército)',
+  MctiTreatmentRule: 'MCTI/CIBES',
+  MinDefesaTreatmentRule: 'MIN. DEFESA',
+  CnenTreatmentRule: 'CNEN/ANSN',
+  AnpTreatmentRule: 'ANP',
+  AneelTreatmentRule: 'ANEEL',
+  EctTreatmentRule: 'ECT/Correios',
+  DnpmAnmTreatmentRule: 'ANM (ex-DNPM)',
+  CnpqTreatmentRule: 'CNPq',
+  AncineTreatmentRule: 'ANCINE (histórico)',
+};
+
+export function orgaoDoLabel(label: string): string {
+  return ORGAO_POR_LABEL[label] ?? label.replace(/TreatmentRule$/, '');
+}
+
+/** "3304.99.90" | "33049990" → id no formato do grafo. */
+const ncmId = (code: string) => `NCM_CODE_${String(code).replace(/\D/g, '')}`;
+
 /**
- * O formato do identificador varia conforme a carga do grafo. Nesta instância os
- * NCMCode usam o código puro ("30023060"), mas outras cargas usam o prefixo
- * "NCM_CODE_". Geramos todas as variantes e deixamos o Cypher casar qualquer uma.
+ * Tratamentos administrativos que incidem sobre um NCM.
+ * Os coalesce cobrem os diferentes schemas de cada órgão.
  */
-function ncmVariants(code: string) {
-  const d = String(code).replace(/\D/g, '');
-  const dotted = d.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
-  return { digits: d, dotted, prefixed: `NCM_CODE_${d}` };
-}
-
-/** Casa o nó de NCM por qualquer propriedade/formato usado nas cargas conhecidas. */
-const MATCH_NCM = `
-  MATCH (n:NCMCode)
-  WHERE n.id IN $variants OR n.code IN $variants OR n.codigo IN $variants
-`;
-
-/** Tratamentos administrativos (TA/LPCO) que incidem sobre um NCM, por órgão. */
-export function getTaPorNcm(code: string) {
-  const v = ncmVariants(code);
+export async function getTaPorNcm(code: string) {
   const cypher = `
-    ${MATCH_NCM}
-    WITH n LIMIT 1
-    MATCH (rule)-[:APLICA_SOBRE]->(n)
+    MATCH (rule)-[:APLICA_SOBRE]->(n:NCMCode {id: $id})
     RETURN
-      labels(rule)[0]                     AS orgao_label,
-      rule.orgao_anuente                  AS orgao_npi,
-      rule.orgao_nome_normalizado         AS orgao_nome,
-      rule.ta_id                          AS ta_id,
-      rule.codigo_modelo                  AS modelo,
-      rule.nome_modelo_lpco               AS nome_modelo,
-      rule.tipo_ta                        AS tipo_ta,
-      rule.impede_desembaraco             AS impede_desembaraco,
-      rule.prazo_validade_lpco            AS prazo,
-      rule.base_legal_ta                  AS base_legal,
-      rule.inicio_vigencia_ta             AS vigencia
+      labels(rule)[0] AS orgao_label,
+      coalesce(rule.orgao_anuente, rule.orgao)                              AS orgao_npi,
+      coalesce(rule.ta_id, rule.codigo_ta)                                  AS ta_id,
+      coalesce(rule.tipo_ta, rule.categoria_regulatoria, rule.descricao)    AS tipo_ta,
+      coalesce(rule.codigo_modelo, rule.lpco_unico, rule.nome_modelo_lpco)  AS modelo,
+      rule.impede_desembaraco                                               AS impede_desembaraco,
+      coalesce(rule.base_legal_ta, rule.fundamentacao_legal)                AS base_legal,
+      coalesce(rule.inicio_vigencia_ta, rule.data_inicio_vigencia)          AS vigencia,
+      rule.prazo_validade_lpco                                              AS prazo,
+      rule.duimp AS duimp, rule.inspecao AS inspecao, rule.ncm_scope AS escopo,
+      coalesce(rule.rule_id, rule.id)                                       AS rule_id
     ORDER BY orgao_label, ta_id`;
-  return query(cypher, { variants: [v.digits, v.dotted, v.prefixed] });
+  const rows = await query(cypher, { id: ncmId(code) });
+  // Órgão sempre preenchido: usa o do NPI quando existe, senão deriva do label.
+  return rows.map((r) => ({ ...r, orgao_npi: r.orgao_npi ?? orgaoDoLabel(String(r.orgao_label)) }));
 }
 
-/** Descrição e código de um NCM. */
+/** Código, descrição e nível de um NCM (descrição vem de NCMOccurrence). */
 export async function getNcmInfo(code: string) {
-  const v = ncmVariants(code);
   const cypher = `
-    ${MATCH_NCM}
+    MATCH (n:NCMCode {id: $id})
+    OPTIONAL MATCH (o:NCMOccurrence {code_canonical: n.code_canonical})
     RETURN n.id AS id,
-           coalesce(n.description, n.descricao, n.descricao_ncm) AS descricao,
-           coalesce(n.code, n.codigo, n.id) AS codigo
+           coalesce(o.code_display, n.code_canonical) AS codigo,
+           o.description_plain                        AS descricao,
+           o.level_code                               AS nivel,
+           o.is_leaf                                  AS folha
     LIMIT 1`;
-  const rows = await query(cypher, { variants: [v.digits, v.dotted, v.prefixed] });
+  const rows = await query(cypher, { id: ncmId(code) });
   return rows[0] ?? null;
 }
 
@@ -68,9 +93,10 @@ export function getStats() {
 }
 
 /** Órgãos anuentes com regras NCM ativas. */
-export function getOrgaosAtivos() {
-  return query(`
+export async function getOrgaosAtivos() {
+  const rows = await query(`
     MATCH (rule)-[:APLICA_SOBRE]->(:NCMCode)
-    RETURN rule.orgao_anuente AS orgao, rule.orgao_nome_normalizado AS nome, count(rule) AS total_ncm
+    RETURN labels(rule)[0] AS orgao_label, count(*) AS total_ncm
     ORDER BY total_ncm DESC`);
+  return rows.map((r) => ({ ...r, orgao: orgaoDoLabel(String(r.orgao_label)) }));
 }
