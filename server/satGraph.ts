@@ -4,16 +4,35 @@
  *
  * Consultas do SAT-Graph (motor de conformidade aduaneira sobre o Neo4j).
  * SOMENTE LEITURA — não cria nem altera nós/relações (o grafo é de produção).
- * Modelo: (TreatmentRule)-[:APLICA_SOBRE]->(:NCMCode {id:"NCM_CODE_<digitos>"}).
+ * Modelo: (TreatmentRule)-[:APLICA_SOBRE]->(:NCMCode). O identificador do NCM
+ * varia por carga (código puro ou prefixado) — ver ncmVariants abaixo.
  */
 import { query } from './neo4j';
 
-const ncmId = (code: string) => `NCM_CODE_${String(code).replace(/\D/g, '')}`;
+/**
+ * O formato do identificador varia conforme a carga do grafo. Nesta instância os
+ * NCMCode usam o código puro ("30023060"), mas outras cargas usam o prefixo
+ * "NCM_CODE_". Geramos todas as variantes e deixamos o Cypher casar qualquer uma.
+ */
+function ncmVariants(code: string) {
+  const d = String(code).replace(/\D/g, '');
+  const dotted = d.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
+  return { digits: d, dotted, prefixed: `NCM_CODE_${d}` };
+}
+
+/** Casa o nó de NCM por qualquer propriedade/formato usado nas cargas conhecidas. */
+const MATCH_NCM = `
+  MATCH (n:NCMCode)
+  WHERE n.id IN $variants OR n.code IN $variants OR n.codigo IN $variants
+`;
 
 /** Tratamentos administrativos (TA/LPCO) que incidem sobre um NCM, por órgão. */
 export function getTaPorNcm(code: string) {
+  const v = ncmVariants(code);
   const cypher = `
-    MATCH (rule)-[:APLICA_SOBRE]->(n:NCMCode {id: $ncm_id})
+    ${MATCH_NCM}
+    WITH n LIMIT 1
+    MATCH (rule)-[:APLICA_SOBRE]->(n)
     RETURN
       labels(rule)[0]                     AS orgao_label,
       rule.orgao_anuente                  AS orgao_npi,
@@ -27,15 +46,19 @@ export function getTaPorNcm(code: string) {
       rule.base_legal_ta                  AS base_legal,
       rule.inicio_vigencia_ta             AS vigencia
     ORDER BY orgao_label, ta_id`;
-  return query(cypher, { ncm_id: ncmId(code) });
+  return query(cypher, { variants: [v.digits, v.dotted, v.prefixed] });
 }
 
 /** Descrição e código de um NCM. */
 export async function getNcmInfo(code: string) {
+  const v = ncmVariants(code);
   const cypher = `
-    MATCH (n:NCMCode {id: $ncm_id})
-    RETURN n.id AS id, coalesce(n.description, n.descricao) AS descricao, coalesce(n.code, n.codigo) AS codigo`;
-  const rows = await query(cypher, { ncm_id: ncmId(code) });
+    ${MATCH_NCM}
+    RETURN n.id AS id,
+           coalesce(n.description, n.descricao, n.descricao_ncm) AS descricao,
+           coalesce(n.code, n.codigo, n.id) AS codigo
+    LIMIT 1`;
+  const rows = await query(cypher, { variants: [v.digits, v.dotted, v.prefixed] });
   return rows[0] ?? null;
 }
 
