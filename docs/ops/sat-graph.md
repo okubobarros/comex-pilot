@@ -63,6 +63,40 @@ atual da Vercel **não serve `/api/*`**, então a Conformidade só funciona:
 Para produção, o passo seguinte é publicar o `server.ts` como função/serviço na Vercel (ou outro
 host Node) com as variáveis `NEO4J_*` no ambiente.
 
+## ⚠️ Gotcha nº 3 — credencial do CONSOLE ≠ credencial do BANCO
+
+Erro `Neo.ClientError.Security.Unauthorized` quase sempre é isto:
+
+| | Login | Senha |
+|---|---|---|
+| **Console** (console.neo4j.io) | seu e-mail (ex.: `voce@gmail.com`) | senha da sua **conta** |
+| **Banco** (`neo4j+s://...`) | **sempre `neo4j`** | senha **da instância** |
+
+No `.env` vai SEMPRE a credencial **do banco**:
+```
+NEO4J_USER="neo4j"          # nunca o e-mail
+NEO4J_PASSWORD="<senha da INSTÂNCIA>"
+```
+
+A senha da instância é mostrada **uma única vez**, na criação (e no arquivo
+`.txt` que o Aura oferece para baixar). Se não a tiver, gere outra:
+**console.neo4j.io → sua instância (`785150a4`) → ⋯ → Reset password**.
+
+### Diagnóstico rápido
+```bash
+node -e "require('dotenv').config();const n=require('neo4j-driver');
+const d=n.driver(process.env.NEO4J_URI,n.auth.basic(process.env.NEO4J_USER,process.env.NEO4J_PASSWORD));
+d.getServerInfo().then(()=>console.log('OK')).catch(e=>console.log('FALHOU',e.code)).finally(()=>d.close())"
+```
+- `Unauthorized` → senha/usuário do banco errados (ver acima).
+- Erro de DNS/timeout → URI errada ou instância pausada.
+
+### Validar as queries sem a senha
+O **Query Studio** do console (e a extensão Neo4j do VS Code) usam a sessão do
+navegador — dá para rodar Cypher lá mesmo sem a senha do banco. Use
+`scripts/cypher/validacao_sat_graph.cypher` para conferir labels/propriedades
+reais antes de ligar o app.
+
 ## Regras (do prompt de integração)
 - Não criar nós `NCMCode` nem rodar seeds/migrações no grafo (é produção).
 - Não commitar `.env` com a senha. Não alterar constraints/índices no Neo4j.
