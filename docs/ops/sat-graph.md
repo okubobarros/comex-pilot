@@ -82,8 +82,24 @@ NEO4J_PASSWORD="<senha da INSTÂNCIA>"
 A senha da instância é mostrada **uma única vez**, na criação (e no arquivo
 `.txt` que o Aura oferece para baixar). Se não a tiver, gere outra:
 
-**console.neo4j.io → instância `sat-graph-rag` (785150a4) → menu `⋯` →
-`Recover Database Credentials`** (é o "reset password" do Aura atual).
+No **AuraDB Free não existe reset de senha pelo console** — a opção
+`Recover Database Credentials` apenas abre a documentação. A senha é exibida
+**uma única vez**, na criação da instância.
+
+**Sem a senha, há dois caminhos (nesta ordem):**
+
+**1. Trocar a senha pelo Query Studio** (rápido, preserva tudo)
+O Query Studio do console conecta pela sua **sessão do console** — não pede a
+senha do banco. Então dá para redefinir por lá:
+`Open → Query` → trocar o database para **`system`** → executar:
+```cypher
+ALTER USER neo4j SET PASSWORD 'NovaSenhaForte2026';
+```
+Script pronto: `scripts/cypher/trocar_senha_aura.cypher`.
+
+**2. Clonar a instância** (se o passo 1 der *permission denied*)
+Menu `⋯` → **`Clone To`** → cria uma instância nova **com os dados** e mostra
+as credenciais na criação. Depois é só apontar `NEO4J_URI` para a nova.
 
 > 🚨 **NÃO clique em `Reset To Blank`** — fica logo acima no mesmo menu e
 > **apaga o grafo inteiro** (158.678 nós / 317.962 relações). Nomes vizinhos,
