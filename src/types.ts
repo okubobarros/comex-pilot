@@ -54,8 +54,8 @@ export type TaskId =
   | 'ncm'
   | 'antidumping';
 
-/** Modo do canvas da direita: auditoria padrão ou skill densa (Landed Cost) */
-export type WorkspaceMode = 'audit' | 'landedCost';
+/** Modo do canvas da direita: auditoria, Landed Cost ou Conformidade (SAT-Graph) */
+export type WorkspaceMode = 'audit' | 'landedCost' | 'compliance';
 
 /** Intenção multimodal ativa na barra de comando do chat */
 export type ChatIntent = 'audit' | 'classify' | 'risk';

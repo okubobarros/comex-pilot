@@ -12,6 +12,7 @@ import { COSMETICS_DATABASE } from "./src/data/cosmeticsDb";
 import { costingHandler } from "./server/costingService";
 import { ptaxHandler } from "./server/ptaxService";
 import { normaHandler } from "./server/normaService";
+import { satGraphTestHandler, satGraphNcmHandler } from "./server/satGraphService";
 
 dotenv.config();
 
@@ -24,6 +25,9 @@ app.post("/api/costing", costingHandler);
 app.get("/api/ptax", ptaxHandler);
 // Consulta de norma por identificação (citação clicável do Painel de Evidências).
 app.get("/api/norma", normaHandler);
+// SAT-Graph (Neo4j): motor de conformidade aduaneira — TAs/LPCO por NCM.
+app.get("/api/sat-graph/test", satGraphTestHandler);
+app.get("/api/sat-graph/ncm/:code", satGraphNcmHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

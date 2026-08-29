@@ -22,6 +22,7 @@ import {
 import Logo from './Logo';
 import LandedCostDrawer from './LandedCostDrawer';
 import AuditWorkspace from './audit/AuditWorkspace';
+import ComplianceWorkspace from './compliance/ComplianceWorkspace';
 import { AuditAlert, InvoiceAnalysis, InvoiceItem, WorkspaceMode, WorkspaceStatus } from '../types';
 
 interface WorkspaceProps {
@@ -94,6 +95,10 @@ export default function Workspace({ status, mode, analysis, savingsBrl, onGenera
   // Skill densa ocupa o canvas por cima de qualquer estado de auditoria
   if (mode === 'landedCost') {
     return <LandedCostDrawer onClose={onCloseLandedCost} />;
+  }
+
+  if (mode === 'compliance') {
+    return <ComplianceWorkspace onClose={onCloseLandedCost} />;
   }
 
   // Vincula um alerta ao item da fatura correspondente para prefill da LI

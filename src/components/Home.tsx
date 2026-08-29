@@ -30,6 +30,7 @@ const AGENT_META: Record<AgentId, { label: string; tone: string }> = {
   audit: { label: 'Auditor', tone: 'bg-rose-50 text-rose-700 ring-rose-100' },
   costing: { label: 'Custeio', tone: 'bg-amber-50 text-amber-700 ring-amber-100' },
   ncm: { label: 'Classificador', tone: 'bg-sky-50 text-sky-700 ring-sky-100' },
+  compliance: { label: 'Conformidade', tone: 'bg-teal-50 text-teal-700 ring-teal-100' },
   li: { label: 'Gerador LI', tone: 'bg-violet-50 text-violet-700 ring-violet-100' },
   chat: { label: 'Assistente', tone: 'bg-slate-100 text-slate-600 ring-slate-200' },
 };

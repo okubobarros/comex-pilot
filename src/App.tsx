@@ -387,6 +387,7 @@ export default function App() {
     if (isBusy) return;
     if (id === 'costing') return openTask('landedCost');
     if (id === 'ncm') return openTask('classify');
+    if (id === 'compliance') { setWorkspaceMode('compliance'); setView('workspace'); return; }
     if (id === 'audit') return openTask('audit');
     if (id === 'chat') {
       setChatIntent('audit');
@@ -405,6 +406,7 @@ export default function App() {
   const activeAgent: AgentId | null =
     view === 'home' ? null
     : workspaceMode === 'landedCost' ? 'costing'
+    : workspaceMode === 'compliance' ? 'compliance'
     : chatIntent === 'classify' ? 'ncm'
     : 'audit';
 

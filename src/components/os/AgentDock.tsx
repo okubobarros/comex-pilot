@@ -7,9 +7,9 @@
  * na Área de Trabalho sem recarregar a página.
  */
 import React from 'react';
-import { Calculator, FileText, MessageCircle, Scale, Target } from 'lucide-react';
+import { Calculator, FileText, MessageCircle, Network, Scale, Target } from 'lucide-react';
 
-export type AgentId = 'audit' | 'costing' | 'ncm' | 'li' | 'chat';
+export type AgentId = 'audit' | 'costing' | 'ncm' | 'compliance' | 'li' | 'chat';
 
 interface AgentDef {
   id: AgentId;
@@ -22,6 +22,7 @@ const AGENTS: AgentDef[] = [
   { id: 'audit', label: 'Auditor', camada: 'Extração + Conciliação', icon: <Target className="h-5 w-5" /> },
   { id: 'costing', label: 'Custeio', camada: 'Landed Cost', icon: <Calculator className="h-5 w-5" /> },
   { id: 'ncm', label: 'Classificador NCM', camada: 'Raciocínio Regulatório', icon: <Scale className="h-5 w-5" /> },
+  { id: 'compliance', label: 'Conformidade', camada: 'Anuência (SAT-Graph)', icon: <Network className="h-5 w-5" /> },
   { id: 'li', label: 'Gerador de LI', camada: 'Justificativa + Ação', icon: <FileText className="h-5 w-5" /> },
   { id: 'chat', label: 'Assistente Geral', camada: 'Dúvidas avulsas', icon: <MessageCircle className="h-5 w-5" /> },
 ];

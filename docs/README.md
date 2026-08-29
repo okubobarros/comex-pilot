@@ -22,6 +22,7 @@ aduaneira e tributária) e do **ComexPilot** (o app que a materializa).
 | [ops/n8n-flows-audit.md](ops/n8n-flows-audit.md) | Fluxos n8n legados (referência de lógica) + proposta de melhoria que os substitui |
 | [ops/sprint-0.md](ops/sprint-0.md) | Sprint 0 entregue: schema + seeds do piloto cosmético, como aplicar e evidência de validação |
 | [ops/sprint-1.md](ops/sprint-1.md) | Sprint 1 (parcial): ETL da base real (NCM 15k + tributos + referência), como rodar e validação |
+| [ops/sat-graph.md](ops/sat-graph.md) | Integração Neo4j (SAT-Graph): motor de conformidade por NCM — como conectar, rotas e caveat de produção |
 | [roadmap/sprints.md](roadmap/sprints.md) | Plano de sprints derivado do roadmap do PRD |
 
 ## Como reproduzir "a ideia do app real"
