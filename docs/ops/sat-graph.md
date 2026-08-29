@@ -81,7 +81,26 @@ NEO4J_PASSWORD="<senha da INSTÂNCIA>"
 
 A senha da instância é mostrada **uma única vez**, na criação (e no arquivo
 `.txt` que o Aura oferece para baixar). Se não a tiver, gere outra:
-**console.neo4j.io → sua instância (`785150a4`) → ⋯ → Reset password**.
+
+**console.neo4j.io → instância `sat-graph-rag` (785150a4) → menu `⋯` →
+`Recover Database Credentials`** (é o "reset password" do Aura atual).
+
+> 🚨 **NÃO clique em `Reset To Blank`** — fica logo acima no mesmo menu e
+> **apaga o grafo inteiro** (158.678 nós / 317.962 relações). Nomes vizinhos,
+> consequências opostas.
+
+### Conectar pela extensão Neo4j do VS Code
+| Campo | Valor |
+|---|---|
+| Display name | `sat-graph-rag` |
+| **Scheme** | **`neo4j+s://`** (o default `neo4j://` falha — o Aura exige TLS) |
+| **Host** | `785150a4.databases.neo4j.io` (só o host, sem esquema e sem porta) |
+| Port | `7687` |
+| User | `neo4j` |
+| Password | a senha da instância |
+
+Atenção: há **duas instâncias** na conta — `My instance` (`c36586f0`, vazia) e
+`sat-graph-rag` (`785150a4`, com o grafo). A senha precisa ser a da **segunda**.
 
 ### Diagnóstico rápido
 ```bash
