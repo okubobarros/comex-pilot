@@ -43,6 +43,12 @@ export type WorkspaceStatus = 'empty' | 'loading' | 'complete';
 
 export type AppView = 'home' | 'workspace';
 
+/**
+ * Agente responsável por um resultado. Vivia em `os/AgentDock`, removido junto
+ * com a barra inferior que duplicava a navegação lateral.
+ */
+export type AgentId = 'audit' | 'costing' | 'ncm' | 'compliance' | 'li' | 'chat';
+
 export type TaskId =
   | 'audit'
   | 'compliance'

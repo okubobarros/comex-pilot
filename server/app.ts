@@ -385,7 +385,8 @@ app.post("/api/analyze-invoice", async (req: Request, res: Response) => {
         success: true,
         method: "expert_heuristics_fallback",
         analysis: {
-          fileName: "CUSTOM_UPLOAD_FALLBACK.txt",
+          // Rótulo visível ao usuário no pipeline, não um código interno.
+          fileName: "Auditoria de invoice",
           analyzedAt: new Date().toISOString(),
           totalFobUsd,
           currency: "USD",

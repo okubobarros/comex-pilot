@@ -261,7 +261,8 @@ export function buildHeuristicAnalysis(text: string, rules: NcmRule[]): InvoiceA
   const { alerts, riskScore } = computeAlerts(items, rules);
 
   return {
-    fileName: 'COMANDO_CHAT_AUDIT.txt',
+    // Nome que o usuário lê no pipeline — sem rótulo interno.
+    fileName: 'Auditoria de invoice',
     analyzedAt: new Date().toISOString(),
     items,
     alerts,

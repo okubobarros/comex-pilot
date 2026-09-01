@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Calculator, Check, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check, FileDown, GitCompare, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
 import { DEFAULT_NCM_RULES } from '../data/ncmRules';
@@ -70,6 +70,16 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
   const [engineLoading, setEngineLoading] = useState(false);
   const [ptaxDate, setPtaxDate] = useState<string | null>(null);
   const [ptaxLoading, setPtaxLoading] = useState(false);
+  /**
+   * Cenário B: o mesmo embarque desembaraçado por OUTRO porto.
+   *
+   * É a comparação que mais move dinheiro no custeio, porque o ICMS é estadual:
+   * a mesma carga entrando por Santos (SP) ou por Itapoá (SC) muda a alíquota e,
+   * com ela, o custo final. O formulário sequencial escondia isso.
+   */
+  const [portoB, setPortoB] = useState<string | null>(null);
+  const [engineB, setEngineB] = useState<CostingResult | null>(null);
+  const [ratesB, setRatesB] = useState<CostingRates | null>(null);
   // Data do fato gerador = hoje. A lógica versionada (IBS/CBS por vigência)
   // continua no motor/backend; apenas não é mais selecionável na interface.
   const dataFatoGerador = new Date().toISOString().slice(0, 10);
@@ -152,6 +162,37 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
     applyCosting(result, r, 'base local');
   };
 
+  /** Roda o motor para um porto qualquer, sem tocar no estado do cenário A. */
+  const calcularPara = async (porto: string): Promise<{ r: CostingResult; rates: CostingRates }> => {
+    const corpo = {
+      ncm: inputs.ncm, uf: ufFromPort(porto), modal: 'longo_curso',
+      qtdeAdicoes: 1, fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd,
+      insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl, dataFatoGerador,
+    };
+    try {
+      const resp = await fetch('/api/costing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+      });
+      const data = resp.ok ? await resp.json() : { success: false };
+      if (data.success) return { r: data.result, rates: data.rates };
+    } catch { /* cai no motor local */ }
+    const rates = resolveRatesLocal(inputs.ncm, ufFromPort(porto), dataFatoGerador);
+    return {
+      r: computeCosting(
+        { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl },
+        rates,
+      ),
+      rates,
+    };
+  };
+
+  const compararCom = async (porto: string) => {
+    setPortoB(porto);
+    if (!porto) { setEngineB(null); setRatesB(null); return; }
+    const { r, rates } = await calcularPara(porto);
+    setEngineB(r); setRatesB(rates);
+  };
+
   // Consulta o motor real (alíquotas do banco); se indisponível, calcula localmente.
   const calcular = async () => {
     setShowResult(true);
@@ -175,6 +216,7 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
     } finally {
       setEngineLoading(false);
     }
+    if (portoB) void compararCom(portoB);
   };
 
 
@@ -249,9 +291,35 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
               <p className="text-sm text-slate-400">Landed Cost assistido · imposto de importação, IPI, PIS/COFINS e ICMS</p>
             </div>
           </div>
-          <button onClick={onClose} title="Fechar skill" className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              disabled={!engine}
+              title={engine
+                ? 'Abre a caixa de impressão do navegador — escolha "Salvar como PDF"'
+                : 'Calcule o custeio antes de exportar'}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors duration-150 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <FileDown className="h-3.5 w-3.5" /> Exportar dossiê em PDF
+            </button>
+            <button onClick={onClose} title="Fechar skill" className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Cabeçalho que só existe no PDF — dá identidade e rastreabilidade ao
+            documento que sai da impressão. */}
+        <div className="hidden print:mb-4 print:block print:border-b print:border-slate-300 print:pb-3">
+          <p className="text-lg font-bold tracking-tight">ComexPilot · Dossiê de Custeio de Importação</p>
+          <p className="mt-0.5 text-xs">
+            NCM {inputs.ncm || '—'} · {inputs.productDescription || 'mercadoria não descrita'} ·
+            origem {inputs.origin} · entrada por {inputs.entryPort}
+          </p>
+          <p className="text-xs">
+            Emitido em {new Date().toLocaleString('pt-BR')} · câmbio USD/BRL {inputs.usdBrl} ·
+            fato gerador {dataFatoGerador}
+          </p>
         </div>
 
         {/* Assisted fill */}
@@ -418,6 +486,72 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
                 <Calculator className="h-4 w-4" />
                 Calcular Landed Cost
               </button>
+
+              {/* Cenário B — o mesmo embarque por outro porto de entrada */}
+              <div className="mt-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <GitCompare className="h-4 w-4 shrink-0 text-indigo-500" />
+                  <span className="text-xs font-semibold text-slate-700">Comparar com outro porto de entrada</span>
+                  <select
+                    value={portoB ?? ''}
+                    onChange={(e) => void compararCom(e.target.value)}
+                    className="ml-auto rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Sem comparação</option>
+                    {PORTOS_ENTRADA.filter((p) => p !== inputs.entryPort).map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                  O ICMS é estadual: a mesma carga entrando por UFs diferentes tem custo final
+                  diferente. Escolha um porto para ver o impacto lado a lado.
+                </p>
+
+                {engineB && engine && (
+                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+                    <div className="grid grid-cols-3 border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      <span className="px-3 py-2">Tributo</span>
+                      <span className="px-3 py-2 text-right">A · {inputs.entryPort}</span>
+                      <span className="px-3 py-2 text-right">B · {portoB}</span>
+                    </div>
+                    {([
+                      ['II', engine.ii, engineB.ii],
+                      ['IPI', engine.ipi, engineB.ipi],
+                      ['PIS', engine.pis, engineB.pis],
+                      ['COFINS', engine.cofins, engineB.cofins],
+                      [`ICMS (${engineRates?.icmsPct ?? '—'}% × ${ratesB?.icmsPct ?? '—'}%)`, engine.icms, engineB.icms],
+                    ] as [string, number, number][]).map(([k, a, b]) => (
+                      <div key={k} className="grid grid-cols-3 border-b border-slate-100 text-xs last:border-0">
+                        <span className="px-3 py-1.5 text-slate-500">{k}</span>
+                        <span className="px-3 py-1.5 text-right font-mono text-slate-700">{brl(a)}</span>
+                        <span className={`px-3 py-1.5 text-right font-mono ${
+                          b < a ? 'text-emerald-600' : b > a ? 'text-rose-600' : 'text-slate-700'
+                        }`}>{brl(b)}</span>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-3 bg-slate-900 text-white">
+                      <span className="px-3 py-2.5 text-[11px] font-semibold">Custo total</span>
+                      <span className="px-3 py-2.5 text-right font-mono text-sm font-semibold">{brl(engine.ctiAsIs)}</span>
+                      <span className="px-3 py-2.5 text-right font-mono text-sm font-semibold">{brl(engineB.ctiAsIs)}</span>
+                    </div>
+                    <div className={`px-3 py-2 text-xs font-semibold ${
+                      engineB.ctiAsIs < engine.ctiAsIs
+                        ? 'bg-emerald-50 text-emerald-800'
+                        : engineB.ctiAsIs > engine.ctiAsIs ? 'bg-rose-50 text-rose-800' : 'bg-slate-50 text-slate-600'
+                    }`}>
+                      {engineB.ctiAsIs === engine.ctiAsIs
+                        ? 'Custo idêntico nos dois portos.'
+                        : engineB.ctiAsIs < engine.ctiAsIs
+                          ? `Entrar por ${portoB} economiza ${brl(engine.ctiAsIs - engineB.ctiAsIs)} neste embarque.`
+                          : `Entrar por ${portoB} custa ${brl(engineB.ctiAsIs - engine.ctiAsIs)} a mais neste embarque.`}
+                      <span className="ml-1 font-normal text-slate-500">
+                        Compara só a carga tributária — frete interno e armazenagem no destino não entram.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {showResult && (
                 <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" id="landed-cost-result">

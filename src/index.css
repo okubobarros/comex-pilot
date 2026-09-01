@@ -6,3 +6,35 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+/* ---------------------------------------------------------------------------
+ * Impressão — "Exportar dossiê em PDF" usa a caixa de impressão do navegador.
+ *
+ * Sem isto o PDF sairia com a sidebar, o copiloto e o painel de evidências
+ * ocupando metade da folha. Aqui sobra só o conteúdo do workspace, em preto no
+ * branco, com o cabeçalho do dossiê que só existe na impressão.
+ * ------------------------------------------------------------------------- */
+@media print {
+  @page { margin: 14mm; }
+
+  #nav-rail,
+  #chat-column,
+  #chat-collapse-toggle,
+  #evidence-panel,
+  .print\:hidden { display: none !important; }
+
+  body { background: #fff !important; }
+
+  /* O app vive em telas de altura fixa com rolagem interna; na folha tudo
+     precisa fluir, senão só a primeira dobra é impressa. */
+  #comexpilot-app-root,
+  #comexpilot-app-root * {
+    overflow: visible !important;
+    max-height: none !important;
+    box-shadow: none !important;
+  }
+  #comexpilot-app-root { height: auto !important; display: block !important; }
+
+  /* Evita quebrar um bloco de resultado no meio da página. */
+  #landed-cost-result, #engine-result { break-inside: avoid; }
+}

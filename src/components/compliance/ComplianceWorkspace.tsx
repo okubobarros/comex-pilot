@@ -128,7 +128,7 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
 
   const { setEvidence } = useEvidence();
   const [verHierarquia, setVerHierarquia] = useState(false);
-  const { conformidade, setConformidade } = useProcessos();
+  const { conformidade, setConformidade, registrarProcesso } = useProcessos();
 
   // A consulta vive no ProcessContext: trocar de agente no Dock não a descarta (P5).
   const data: Resultado | null = conformidade
@@ -245,9 +245,24 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
     });
   };
 
+  /**
+   * Manda a consulta para o pipeline da Home com o que ela realmente apurou:
+   * quantos tratamentos impedem o desembaraço e quais órgãos precisam anuir.
+   */
   const salvarNoProcesso = () => {
     if (!data) return;
-    setSalvo(true); // já persistido no ProcessContext pela consulta
+    const orgaos = [...new Set(grupos.map(([orgao]) => orgao))];
+    registrarProcesso({
+      nome: `Anuência · NCM ${val(data.ncm.codigo) ?? ncm}`,
+      agente: 'compliance',
+      status: totalBloqueios > 0 ? 'pendente' : 'concluido',
+      canal: totalBloqueios > 0 ? 'vermelho' : 'verde',
+      resumo: `${data.total_orgaos} órgão(s) · ${data.tratamentos.length} tratamento(s)`
+        + (totalBloqueios > 0 ? ` · ${totalBloqueios} impedem desembaraço` : ''),
+      lpcoPendentes: totalBloqueios,
+      orgaos,
+    });
+    setSalvo(true);
   };
 
   // Agrupa por órgão, com os que impedem desembaraço primeiro (P6).
@@ -276,8 +291,8 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
               <Network className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-semibold tracking-tight text-slate-900">Motor de Conformidade · SAT-Graph</h2>
-              <p className="text-sm text-slate-400">Órgãos anuentes e tratamentos administrativos (TA/LPCO) por NCM — grafo Neo4j</p>
+              <h2 className="font-display text-lg font-semibold tracking-tight text-slate-900">Verificador de Anuência e Regras de Importação</h2>
+              <p className="text-sm text-slate-400">Quais órgãos precisam autorizar a importação deste NCM e o que cada um exige</p>
             </div>
           </div>
           <button onClick={onClose} title="Fechar" className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600">

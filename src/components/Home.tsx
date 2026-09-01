@@ -6,18 +6,26 @@
  * e atalhos de intenção. Substitui o antigo grid de cards estáticos: agora a home
  * mostra o ESTADO REAL das operações (Pendente / Em Análise / Concluído).
  */
-import React, { useState } from 'react';
-import { ArrowUp, Calculator, FileText, Scale, Ship, Sparkles, Target } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowUp, Calculator, FileText, FolderSearch, Scale, ShieldAlert, Ship,
+  Sparkles, Target, TrendingUp, UploadCloud,
+} from 'lucide-react';
 import type { TaskId } from '../types';
 import { useProcessos, Processo, ProcStatus } from '../context/ProcessContext';
-import type { AgentId } from './os/AgentDock';
+import type { AgentId } from '../types';
 
 interface HomeProps {
   aiStatus: 'idle' | 'success' | 'simulated';
   onOpenTask: (taskId: TaskId) => void;
   onRunCommand: (command: string) => void;
   onOpenProcess: (processo: Processo) => void;
+  /** Documento largado na dropzone — mesma esteira do anexo no copiloto. */
+  onArquivo: (arquivo: { nome: string; texto: string | null; isImage: boolean }) => void;
 }
+
+const brl = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 const INTENT_SHORTCUTS: { id: TaskId; label: string; icon: React.ReactNode }[] = [
   { id: 'audit', label: 'Auditar documentos', icon: <Target className="h-3.5 w-3.5" /> },
@@ -44,9 +52,72 @@ const COLUNAS: { status: ProcStatus; titulo: string }[] = [
   { status: 'concluido', titulo: 'Concluído' },
 ];
 
-export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess }: HomeProps) {
+const TONS: Record<string, { fundo: string; icone: string; valor: string }> = {
+  emerald: { fundo: 'border-emerald-200/70 bg-emerald-50/40', icone: 'bg-emerald-100 text-emerald-700', valor: 'text-emerald-700' },
+  indigo:  { fundo: 'border-indigo-200/70 bg-indigo-50/40',   icone: 'bg-indigo-100 text-indigo-700',   valor: 'text-indigo-700' },
+  amber:   { fundo: 'border-amber-200/70 bg-amber-50/40',     icone: 'bg-amber-100 text-amber-700',     valor: 'text-amber-700' },
+};
+
+function Kpi({ icone, rotulo, valor, nota, tom, ativo }: {
+  icone: React.ReactNode; rotulo: string; valor: string; nota: string; tom: string; ativo: boolean;
+}) {
+  const t = TONS[tom];
+  return (
+    <div className={`rounded-xl border p-4 shadow-sm transition-colors duration-150 ${
+      ativo ? t.fundo : 'border-slate-200/80 bg-white'
+    }`}>
+      <div className="flex items-center gap-2">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+          ativo ? t.icone : 'bg-slate-100 text-slate-400'
+        }`}>
+          {icone}
+        </span>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{rotulo}</p>
+      </div>
+      <p className={`mt-2 font-display text-2xl font-bold tracking-tight ${ativo ? t.valor : 'text-slate-300'}`}>
+        {valor}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-tight text-slate-400">{nota}</p>
+    </div>
+  );
+}
+
+export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess, onArquivo }: HomeProps) {
   const [command, setCommand] = useState('');
+  const [arrastando, setArrastando] = useState(false);
   const { processos } = useProcessos();
+
+  /**
+   * KPIs apurados do que o usuário executou — nada fixo.
+   *
+   * A tentação aqui era cravar "R$ 48.500" para a tela parecer cheia. Num
+   * produto de conformidade isso é o mesmo defeito que acabamos de remover das
+   * auditorias: número inventado com aparência de apurado. Zero é a resposta
+   * honesta num pipeline vazio, e a dropzone assume o protagonismo.
+   */
+  const kpis = useMemo(() => {
+    const economia = processos.reduce((t, p) => t + (p.economiaBrl ?? 0), 0);
+    const emAuditoria = processos.filter((p) => p.agente === 'audit' && p.status !== 'concluido');
+    const comLpco = processos.filter((p) => (p.lpcoPendentes ?? 0) > 0);
+    const orgaos = [...new Set(comLpco.flatMap((p) => p.orgaos ?? []))];
+    return {
+      economia,
+      emAuditoria: emAuditoria.length,
+      auditoriasTotais: processos.filter((p) => p.agente === 'audit').length,
+      lpco: comLpco.reduce((t, p) => t + (p.lpcoPendentes ?? 0), 0),
+      orgaos,
+    };
+  }, [processos]);
+
+  const receberArquivo = async (file: File) => {
+    const isImage = /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(file.name);
+    const legivel = /\.(txt|csv|tsv|json|xml|md|edi)$/i.test(file.name);
+    let texto: string | null = null;
+    if (!isImage && legivel) {
+      try { texto = await file.text(); } catch { texto = null; }
+    }
+    onArquivo({ nome: file.name, texto, isImage });
+  };
 
   const submitCommand = (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,6 +152,79 @@ export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess
             <ArrowUp className="h-4 w-4" />
           </button>
         </form>
+
+        {/* Dashboard executivo — números apurados do próprio pipeline */}
+        <div className="mt-6 grid gap-3 lg:grid-cols-3">
+          <Kpi
+            icone={<TrendingUp className="h-4 w-4" />}
+            rotulo="Exposição evitada"
+            valor={kpis.economia > 0 ? brl(kpis.economia) : '—'}
+            nota={kpis.auditoriasTotais === 0
+              ? 'audite uma invoice para apurar'
+              : kpis.economia > 0
+                ? `apurado em ${kpis.auditoriasTotais} ${kpis.auditoriasTotais === 1 ? 'auditoria' : 'auditorias'}`
+                : `nenhuma oportunidade nas ${kpis.auditoriasTotais === 1 ? 'auditorias' : 'auditorias'} feitas`}
+            tom="emerald"
+            ativo={kpis.economia > 0}
+          />
+          <Kpi
+            icone={<FolderSearch className="h-4 w-4" />}
+            rotulo="Processos em auditoria"
+            valor={kpis.emAuditoria > 0 ? String(kpis.emAuditoria) : '—'}
+            nota={kpis.emAuditoria > 0 ? 'aguardando tratativa' : 'nenhum processo aberto'}
+            tom="indigo"
+            ativo={kpis.emAuditoria > 0}
+          />
+          <Kpi
+            icone={<ShieldAlert className="h-4 w-4" />}
+            rotulo="Anuências pendentes (LPCO)"
+            valor={kpis.lpco > 0 ? String(kpis.lpco) : '—'}
+            nota={kpis.orgaos.length ? `em ${kpis.orgaos.slice(0, 3).join(', ')}` : 'nenhuma anuência em aberto'}
+            tom="amber"
+            ativo={kpis.lpco > 0}
+          />
+        </div>
+
+        {/* Dropzone — o caminho mais curto entre um documento e um veredito */}
+        <label
+          onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+          onDragLeave={() => setArrastando(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setArrastando(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) void receberArquivo(f);
+          }}
+          className={`mt-3 flex cursor-pointer items-center gap-4 rounded-xl border-2 border-dashed p-5 transition-colors duration-150 ${
+            arrastando
+              ? 'border-indigo-400 bg-indigo-50/60'
+              : 'border-slate-300 bg-white/70 hover:border-indigo-300 hover:bg-white'
+          }`}
+        >
+          <input
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void receberArquivo(f);
+              e.target.value = '';
+            }}
+          />
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+            arrastando ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'
+          }`}>
+            <UploadCloud className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-800">
+              Arraste sua Invoice ou BL aqui para auditoria ou custeio instantâneo
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Leio .txt, .csv, .json, .xml e .md. Para PDF, cole o conteúdo na barra acima —
+              não analiso o que não consigo ler.
+            </p>
+          </div>
+        </label>
 
         {/* Atalhos de intenção */}
         <div className="mt-3 flex flex-wrap gap-1.5">

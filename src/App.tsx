@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { AppView, AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, TaskId, WorkspaceMode, WorkspaceStatus } from './types';
+import { AgentId, AppView, AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, TaskId, WorkspaceMode, WorkspaceStatus } from './types';
 import { DEFAULT_NCM_RULES } from './data/ncmRules';
 import { buildHeuristicAnalysis, computeAlerts, computeSavingsBrl, findRuleForNcm } from './engine/rulesEngine';
 import NavRail from './components/NavRail';
@@ -14,7 +14,6 @@ import ChatPanel, { ArquivoEnviado, SuggestionPill } from './components/ChatPane
 import Workspace from './components/Workspace';
 import LiMinutaModal from './components/LiMinutaModal';
 import TopBar from './components/os/TopBar';
-import AgentDock, { AgentId } from './components/os/AgentDock';
 import EvidencePanel from './components/os/EvidencePanel';
 import type { Processo } from './context/ProcessContext';
 import { useEvidence } from './context/EvidenceContext';
@@ -163,6 +162,7 @@ export default function App() {
         status: finalAnalysis.alerts.some((a) => a.severity === 'red') ? 'pendente' : 'concluido',
         canal,
         resumo: `Risco ${finalAnalysis.riskScore}% · ${finalAnalysis.alerts.filter((a) => a.severity === 'red').length} bloqueio(s) · ${finalAnalysis.items.length} item(ns)`,
+        economiaBrl: computeSavingsBrl(finalAnalysis.items, customRules),
       });
 
       const extraReply = getExtraReply?.();
@@ -558,12 +558,6 @@ export default function App() {
     }
   };
 
-  const activeAgent: AgentId | null =
-    view === 'home' ? null
-    : workspaceMode === 'landedCost' ? 'costing'
-    : workspaceMode === 'compliance' ? 'compliance'
-    : chatIntent === 'classify' ? 'ncm'
-    : 'audit';
 
   // Item destacado na sidebar, derivado do estado do canvas.
   const activeTask: TaskId | null =
@@ -586,17 +580,18 @@ export default function App() {
       <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} activeTask={activeTask} />
 
       {view === 'home' ? (
-        <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} onOpenProcess={openProcess} />
+        <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} onOpenProcess={openProcess}
+          onArquivo={(a) => { setView('workspace'); setChatIntent('audit'); setWorkspaceMode('audit'); handleFile(a, 'audit'); }} />
       ) : (
         <>
           {/* Coluna do chat com colapso animado: largura controlada aqui, conteúdo com largura mínima fixa para não amassar durante a transição */}
           <div
             className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
-              isChatCollapsed ? 'w-0 min-w-0' : 'w-[40%] min-w-[380px]'
+              isChatCollapsed ? 'w-0 min-w-0' : 'w-[30%] min-w-[320px] max-w-[440px]'
             }`}
             id="chat-column"
           >
-            <div className="h-full min-w-[380px]">
+            <div className="h-full min-w-[320px]">
               <ChatPanel
                 messages={messages}
                 isBusy={isBusy}
@@ -642,7 +637,6 @@ export default function App() {
       <EvidencePanel />
       </div>
 
-      <AgentDock active={activeAgent} onSelect={onSelectAgent} />
 
       {liPrefill && (
         <LiMinutaModal

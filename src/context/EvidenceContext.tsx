@@ -8,7 +8,7 @@
  * aparecer sem justificativa + citação — este contexto é onde isso vive.
  */
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import type { AgentId } from '../components/os/AgentDock';
+import type { AgentId } from '../types';
 
 export interface Citation {
   /** Identificação da norma (bate com mcat.norma.identificacao). Ex.: "LC 214/2025". */

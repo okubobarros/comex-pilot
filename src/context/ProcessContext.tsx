@@ -14,7 +14,7 @@
  * fonte passa a ler de lá sem mudar a interface.
  */
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import type { AgentId } from '../components/os/AgentDock';
+import type { AgentId } from '../types';
 
 export type ProcStatus = 'pendente' | 'em_analise' | 'concluido';
 export type Canal = 'verde' | 'amarelo' | 'vermelho';
@@ -35,6 +35,12 @@ export interface Processo {
   canal?: Canal;
   quando: string;
   resumo: string;
+  /** Economia/exposição evitada apurada nesta operação, em BRL. */
+  economiaBrl?: number;
+  /** Anuências que ainda impedem o desembaraço deste processo. */
+  lpcoPendentes?: number;
+  /** Órgãos que precisam autorizar — alimenta o KPI de LPCO na Home. */
+  orgaos?: string[];
 }
 
 

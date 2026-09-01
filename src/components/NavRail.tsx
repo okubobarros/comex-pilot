@@ -47,15 +47,15 @@ const SECOES: RailSection[] = [
     titulo: 'Conformidade & Risco',
     itens: [
       { id: 'audit', label: 'Auditar Documentos', hint: 'Invoice / BL', icon: <FileSearch className="h-4 w-4" /> },
-      { id: 'classify', label: 'Classificação NCM', hint: 'Graph-RAG', icon: <Scale className="h-4 w-4" /> },
-      { id: 'compliance', label: 'Risco & LPCO', hint: 'Órgãos anuentes', icon: <ShieldAlert className="h-4 w-4" /> },
+      { id: 'classify', label: 'Classificação NCM', hint: 'Inteligência Fiscal & TI', icon: <Scale className="h-4 w-4" /> },
+      { id: 'compliance', label: 'Risco & LPCO', hint: 'Tratamento Administrativo', icon: <ShieldAlert className="h-4 w-4" /> },
     ],
   },
   {
     titulo: 'Financeiro',
     itens: [
-      { id: 'freight', label: 'Cotação de Frete', hint: 'Rate sheets', icon: <Ship className="h-4 w-4" /> },
-      { id: 'landedCost', label: 'Custo de Importação', hint: 'Landed Cost', icon: <Calculator className="h-4 w-4" /> },
+      { id: 'freight', label: 'Cotação de Frete', hint: 'Tabelas & Tarifas de Armadores', icon: <Ship className="h-4 w-4" /> },
+      { id: 'landedCost', label: 'Custo de Importação', hint: 'Planilha de Custeio e Impostos', icon: <Calculator className="h-4 w-4" /> },
     ],
   },
   {
