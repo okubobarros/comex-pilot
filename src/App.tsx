@@ -6,12 +6,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AppView, AuditAlert, ChatIntent, ChatMessage, InvoiceAnalysis, InvoiceItem, LiPrefillData, NcmRule, TaskId, WorkspaceMode, WorkspaceStatus } from './types';
-import { DEFAULT_NCM_RULES, PRESET_SCENARIOS } from './data/mockScenarios';
+import { DEFAULT_NCM_RULES } from './data/ncmRules';
 import { buildHeuristicAnalysis, computeAlerts, computeSavingsBrl, findRuleForNcm } from './engine/rulesEngine';
-import { classifyProduct, formatClassification } from './engine/classifier';
 import NavRail from './components/NavRail';
 import Home from './components/Home';
-import ChatPanel, { SuggestionPill } from './components/ChatPanel';
+import ChatPanel, { ArquivoEnviado, SuggestionPill } from './components/ChatPanel';
 import Workspace from './components/Workspace';
 import LiMinutaModal from './components/LiMinutaModal';
 import TopBar from './components/os/TopBar';
@@ -19,6 +18,7 @@ import AgentDock, { AgentId } from './components/os/AgentDock';
 import EvidencePanel from './components/os/EvidencePanel';
 import type { Processo } from './context/ProcessContext';
 import { useEvidence } from './context/EvidenceContext';
+import { useProcessos } from './context/ProcessContext';
 
 const CHAT_THOUGHTS = [
   '🔍 Lendo documento...',
@@ -26,16 +26,46 @@ const CHAT_THOUGHTS = [
   '📈 Verificando preços de referência...'
 ];
 
+/**
+ * Exemplos de ENTRADA, não de saída. Cada pílula cola um texto de invoice
+ * plausível na esteira real de auditoria — o resultado é calculado na hora pelo
+ * mesmo motor que atende um documento do cliente. Antes elas devolviam análises
+ * pré-fabricadas, o que dava a impressão de um veredito que ninguém computou.
+ */
+const QUEBRA = '\n';
+
 const SUGGESTIONS: SuggestionPill[] = [
-  { label: 'Auditar Invoice de Cosméticos (Coreia)', presetIndex: 0 },
-  { label: 'Verificar Antidumping Stanley (China)', presetIndex: 1 },
-  { label: 'Analisar Isenção de Resina Epóxi (EUA)', presetIndex: 2 }
+  {
+    label: 'Exemplo: invoice de cosméticos (Coreia)',
+    texto: [
+      'COMMERCIAL INVOICE — SEOUL BEAUTY CO. LTD (KR)',
+      '1. Hydrating facial cream, NCM 3304.99.90, 5.000 un x USD 2.10, origin: South Korea',
+      '2. Aloe vera gel 300ml, NCM 3304.99.90, 3.000 un x USD 1.40, origin: South Korea',
+      'Incoterm: FOB Busan · Total FOB USD 14.700',
+    ].join(QUEBRA),
+  },
+  {
+    label: 'Exemplo: garrafas térmicas (China)',
+    texto: [
+      'COMMERCIAL INVOICE — NINGBO HOMEWARE TRADING CO.',
+      '1. Stainless steel vacuum tumbler 900ml, NCM 9617.00.10, 5.000 un x USD 3.80, origin: China',
+      'Incoterm: FOB Ningbo · Total FOB USD 19.000',
+    ].join(QUEBRA),
+  },
+  {
+    label: 'Exemplo: resina epóxi (EUA)',
+    texto: [
+      'COMMERCIAL INVOICE — MIDWEST POLYMERS INC (US)',
+      '1. Epoxy resin, industrial grade, NCM 3907.30.11, 18.000 kg x USD 2.50, origin: USA',
+      'Incoterm: CFR Santos · Total USD 45.000',
+    ].join(QUEBRA),
+  },
 ];
 
 const WELCOME_MESSAGE: ChatMessage = {
   id: 'msg-welcome',
   role: 'assistant',
-  text: 'Olá — sou o agente aduaneiro do **ComexPilot**. Anexe uma Invoice, envie o áudio do despachante ou escolha uma auditoria rápida abaixo. Eu cruzo NCMs com as bases da ANVISA, MAPA, ANATEL e GECEX e devolvo o veredito no workspace ao lado.',
+  text: 'Olá — sou o agente aduaneiro do **ComexPilot**. Cole o texto de uma Invoice, anexe um arquivo legível (.txt, .csv, .json, .xml) ou use um dos exemplos abaixo. Eu cruzo NCMs com as bases da ANVISA, MAPA, ANATEL e GECEX e devolvo o veredito no workspace ao lado.',
 };
 
 const MIN_LOADING_MS = 2500;
@@ -58,6 +88,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('home');
   const [chatIntent, setChatIntent] = useState<ChatIntent>('audit');
   const { setEvidence } = useEvidence();
+  const { registrarProcesso } = useProcessos();
 
   const msgCounter = useRef(0);
 
@@ -123,6 +154,15 @@ export default function App() {
           `Score de risco calculado: ${finalAnalysis.riskScore}% — canal ${canal}.`,
         ],
         citations: [...refs].map((ref) => ({ ref })),
+      });
+
+      // O pipeline só recebe o que foi de fato apurado.
+      registrarProcesso({
+        nome: finalAnalysis.fileName,
+        agente: 'audit',
+        status: finalAnalysis.alerts.some((a) => a.severity === 'red') ? 'pendente' : 'concluido',
+        canal,
+        resumo: `Risco ${finalAnalysis.riskScore}% · ${finalAnalysis.alerts.filter((a) => a.severity === 'red').length} bloqueio(s) · ${finalAnalysis.items.length} item(ns)`,
       });
 
       const extraReply = getExtraReply?.();
@@ -253,9 +293,16 @@ export default function App() {
             .join('\n\n');
         }
       } catch {
-        /* backend indisponível — segue para a heurística local */
+        /* backend indisponível — cai no aviso abaixo */
       }
-      return formatClassification(classifyProduct(text), sourceLabel);
+      // Sem o grafo não há classificação. A versão anterior devolvia um NCM de
+      // cosmético como consolação, que é pior do que não responder: uma NCM
+      // errada com cara de certa vira erro de classificação na DI.
+      return [
+        sourceLabel ?? '',
+        '**Não consegui classificar agora.** O motor de classificação consulta o grafo normativo (SAT-Graph) e ele não respondeu.',
+        '_Nenhuma NCM é sugerida sem essa consulta — uma classificação incorreta com aparência de definitiva é um risco maior do que a ausência de resposta._',
+      ].filter(Boolean).join(QUEBRA + QUEBRA);
     });
 
   const riskReply = (text: string, sourceLabel?: string) => runQuickReply(() => {
@@ -279,8 +326,8 @@ export default function App() {
 
   const handleSuggestion = (pill: SuggestionPill) => {
     if (isBusy) return;
-    pushMessage({ role: 'user', text: pill.label });
-    runAudit(() => PRESET_SCENARIOS[pill.presetIndex]);
+    pushMessage({ role: 'user', text: pill.texto });
+    auditFromText(pill.texto);
   };
 
   const handleSendText = (text: string, intent: ChatIntent) => {
@@ -289,25 +336,25 @@ export default function App() {
     dispatchIntent(text, intent);
   };
 
-  const handleFile = (fileName: string, intent: ChatIntent, isImage: boolean) => {
+  const handleFile = (arquivo: ArquivoEnviado, intent: ChatIntent) => {
     if (isBusy) return;
-    pushMessage({ role: 'user', text: fileName, variant: isImage ? 'image' : 'file' });
+    const { nome, texto, isImage } = arquivo;
+    pushMessage({ role: 'user', text: nome, variant: isImage ? 'image' : 'file' });
 
-    if (intent === 'audit') {
-      const lower = fileName.toLowerCase();
-      let presetIndex = 0;
-      if (lower.includes('stanley') || lower.includes('mug') || lower.includes('summit')) presetIndex = 1;
-      else if (lower.includes('epoxy') || lower.includes('resin') || lower.includes('chem')) presetIndex = 2;
-      else if (lower.includes('drone') || lower.includes('aero')) presetIndex = 3;
-      runAudit(() => ({ ...PRESET_SCENARIOS[presetIndex], fileName, isCustomUpload: true }));
+    // Sem texto extraído não há o que analisar. Antes o app escolhia um cenário
+    // pronto pelo nome do arquivo e o apresentava como auditoria do documento
+    // do cliente — número nenhum ali vinha do que foi enviado.
+    if (!texto?.trim()) {
+      pushMessage({
+        role: 'assistant',
+        text: isImage
+          ? `Ainda não faço leitura de imagem: não consigo extrair os dados de **${nome}**. Cole o texto da fatura ou descreva o produto que eu classifico e audito na hora.`
+          : `Não consigo extrair o texto de **${nome}** no navegador (leio .txt, .csv, .json, .xml e .md). Abra o documento, cole o conteúdo aqui e eu rodo a auditoria completa.`,
+      });
       return;
     }
 
-    // Classify / Risk sobre o nome do arquivo ou "leitura" da imagem
-    const sourceLabel = isImage
-      ? '🖼️ Imagem analisada pela visão computacional do ComexPilot.'
-      : `📎 Documento lido: ${fileName}`;
-    dispatchIntent(fileName, intent, sourceLabel);
+    dispatchIntent(texto, intent, `📎 Documento lido: ${nome}`);
   };
 
   const handleMic = (intent: ChatIntent) => {
@@ -350,9 +397,9 @@ export default function App() {
         }
       } catch (err) {
         console.error(err);
-        voiceReply = 'Não consegui contatar o processador de voz — carreguei a auditoria do lote de cosméticos usando o motor local de regras.';
+        voiceReply = 'Não consegui contatar o processador de voz.';
       }
-      return PRESET_SCENARIOS[0];
+      throw new Error('sem transcrição de áudio');
     }, () => voiceReply);
   };
 

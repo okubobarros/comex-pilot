@@ -96,8 +96,15 @@ export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Pipeline</p>
             <h2 className="mt-1 font-display text-lg font-semibold text-slate-900">Processos ativos</h2>
+            {processos.length === 0 && (
+              <p className="mt-0.5 text-xs text-slate-400">
+                O pipeline registra o que você executar — audite uma invoice ou cote um frete para começar.
+              </p>
+            )}
           </div>
-          <span className="hidden text-xs text-slate-400 sm:block">{processos.length} operações</span>
+          <span className="hidden text-xs text-slate-400 sm:block">
+            {processos.length === 0 ? 'nenhuma operação ainda' : `${processos.length} ${processos.length === 1 ? 'operação' : 'operações'}`}
+          </span>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -131,7 +138,9 @@ export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess
                     );
                   })}
                   {items.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-[11px] text-slate-300">vazio</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-[11px] text-slate-300">
+                      {col.status === 'pendente' ? 'nada aguardando' : col.status === 'em_analise' ? 'nada em análise' : 'nada concluído'}
+                    </div>
                   )}
                 </div>
               </div>

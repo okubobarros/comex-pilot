@@ -3,9 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Estado global dos Processos ativos (entidade Processo do PRD). Alimenta o
- * Kanban do Centro de Operações. São dados operacionais de demonstração —
- * quando o backend persistir processos reais (tabela mcat.processo), esta fonte
- * passa a ler de lá. A estrutura já espelha as colunas/entidades do PRD.
+ * Kanban do Centro de Operações.
+ *
+ * Começa VAZIO. Antes vinha com seis processos de demonstração que pareciam
+ * operações reais em andamento — num produto de conformidade, um pipeline
+ * povoado por ficção é indistinguível de um pipeline de verdade.
+ *
+ * Cada processo aqui nasce de uma ação que o usuário efetivamente executou.
+ * Vive em memória; quando o backend persistir (tabela mcat.processo), esta
+ * fonte passa a ler de lá sem mudar a interface.
  */
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import type { AgentId } from '../components/os/AgentDock';
@@ -31,17 +37,11 @@ export interface Processo {
   resumo: string;
 }
 
-const DEMO: Processo[] = [
-  { id: 'p-1', nome: 'Invoice Cosméticos Coreia', agente: 'audit', status: 'em_analise', canal: 'vermelho', quando: 'há 4 min', resumo: 'Risco 72% · 2 bloqueios (ANVISA, subfaturamento)' },
-  { id: 'p-2', nome: 'Antidumping Stanley China', agente: 'audit', status: 'em_analise', canal: 'amarelo', quando: 'há 22 min', resumo: 'Direitos antidumping ativos · NCM 9617.00.10' },
-  { id: 'p-3', nome: 'Custeio Resina Epóxi', agente: 'costing', status: 'pendente', quando: 'há 1 h', resumo: 'Aguardando câmbio PTAX · FOB US$ 45.000' },
-  { id: 'p-4', nome: 'Custeio Tumblers China', agente: 'costing', status: 'pendente', quando: 'há 2 h', resumo: '5.000 un · Santos (SP) · a calcular' },
-  { id: 'p-5', nome: 'Minuta LI · Gel Aloe Vera', agente: 'li', status: 'concluido', canal: 'verde', quando: 'ontem', resumo: 'XML Siscomex + Termo ANVISA gerados' },
-  { id: 'p-6', nome: 'Classificação · Drone Wi-Fi', agente: 'ncm', status: 'concluido', canal: 'amarelo', quando: 'ontem', resumo: 'NCM 8806.92.00 · homologação ANATEL' },
-];
 
 interface ProcessContextValue {
   processos: Processo[];
+  /** Registra um processo a partir de uma ação real do usuário. */
+  registrarProcesso: (p: Omit<Processo, 'id' | 'quando'>) => void;
   activeId: string | null;
   setActiveId: (id: string | null) => void;
   /** Última consulta de conformidade — sobrevive à troca de agente no Dock. */
@@ -52,11 +52,18 @@ interface ProcessContextValue {
 const ProcessContext = createContext<ProcessContextValue | null>(null);
 
 export function ProcessProvider({ children }: { children: React.ReactNode }) {
-  const [processos] = useState<Processo[]>(DEMO);
+  const [processos, setProcessos] = useState<Processo[]>([]);
+
+  const registrarProcesso = (p: Omit<Processo, 'id' | 'quando'>) => {
+    setProcessos((prev) => [
+      { ...p, id: `p-${Date.now()}-${prev.length}`, quando: 'agora' },
+      ...prev,
+    ]);
+  };
   const [activeId, setActiveId] = useState<string | null>(null);
   const [conformidade, setConformidade] = useState<ConformidadeSnapshot | null>(null);
   const value = useMemo(
-    () => ({ processos, activeId, setActiveId, conformidade, setConformidade }),
+    () => ({ processos, registrarProcesso, activeId, setActiveId, conformidade, setConformidade }),
     [processos, activeId, conformidade]
   );
   return <ProcessContext.Provider value={value}>{children}</ProcessContext.Provider>;

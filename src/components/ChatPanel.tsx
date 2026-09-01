@@ -9,8 +9,10 @@ import Logo from './Logo';
 import { ChatIntent, ChatMessage } from '../types';
 
 export interface SuggestionPill {
+  /** O que aparece na pílula. */
   label: string;
-  presetIndex: number;
+  /** Texto de invoice de exemplo, enviado à esteira real de auditoria. */
+  texto: string;
 }
 
 export interface ThinkingState {
@@ -31,7 +33,19 @@ interface ChatPanelProps {
   onSuggestion: (pill: SuggestionPill) => void;
   onSendText: (text: string, intent: ChatIntent) => void;
   onMic: (intent: ChatIntent) => void;
-  onFile: (fileName: string, intent: ChatIntent, isImage: boolean) => void;
+  /**
+   * Entrega o CONTEÚDO do arquivo, não só o nome. Antes só o nome trafegava, e
+   * o App escolhia um cenário pronto por palavra-chave — auditava um documento
+   * que nunca tinha sido lido.
+   */
+  onFile: (arquivo: ArquivoEnviado, intent: ChatIntent) => void;
+}
+
+export interface ArquivoEnviado {
+  nome: string;
+  /** Texto extraído, ou null quando o formato não é legível no navegador. */
+  texto: string | null;
+  isImage: boolean;
 }
 
 const INTENTS: { key: ChatIntent; label: string; icon: React.ReactNode }[] = [
@@ -74,13 +88,30 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
   };
 
   const isImageFile = (name: string) => /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(name);
+  /** Formatos cujo texto o navegador lê sem biblioteca externa. */
+  const isTextoLegivel = (name: string) => /\.(txt|csv|tsv|json|xml|md|edi)$/i.test(name);
+
+  /** Lê o arquivo e repassa o conteúdo. PDF/imagem seguem sem texto — e o App
+   *  diz isso ao usuário em vez de inventar uma análise. */
+  const enviarArquivo = async (file: File, forcarImagem = false) => {
+    const isImage = forcarImagem || isImageFile(file.name);
+    let texto: string | null = null;
+    if (!isImage && isTextoLegivel(file.name)) {
+      try {
+        texto = await file.text();
+      } catch {
+        texto = null;
+      }
+    }
+    onFile({ nome: file.name, texto, isImage }, intent);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     if (isBusy) return;
     const file = e.dataTransfer.files?.[0];
-    if (file) onFile(file.name, intent, isImageFile(file.name));
+    if (file) void enviarArquivo(file);
   };
 
   return (
@@ -220,7 +251,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) onFile(file.name, intent, isImageFile(file.name));
+              if (file) void enviarArquivo(file);
               e.target.value = '';
             }}
           />
@@ -231,7 +262,7 @@ export default function ChatPanel({ messages, isBusy, thinking, aiStatus, sugges
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) onFile(file.name, intent, true);
+              if (file) void enviarArquivo(file, true);
               e.target.value = '';
             }}
           />

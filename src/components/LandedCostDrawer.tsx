@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Calculator, Check, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { LandedCostInputs } from '../types';
 import { buildHeuristicAnalysis, findRuleForNcm } from '../engine/rulesEngine';
-import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
+import { DEFAULT_NCM_RULES } from '../data/ncmRules';
 import { computeCosting } from '../engine/costing';
 import type { CostingResult, CostingRates } from '../engine/costing';
 import { resolveRatesLocal } from '../engine/offline';
