@@ -15,7 +15,6 @@ import { DEFAULT_NCM_RULES } from '../data/mockScenarios';
 import { computeCosting } from '../engine/costing';
 import type { CostingResult, CostingRates } from '../engine/costing';
 import { resolveRatesLocal } from '../engine/offline';
-import { useReformaDate } from '../context/DateContext';
 import { useEvidence } from '../context/EvidenceContext';
 import CostingCanvas from './costing/CostingCanvas';
 
@@ -58,7 +57,9 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
   const [engineLoading, setEngineLoading] = useState(false);
   const [ptaxDate, setPtaxDate] = useState<string | null>(null);
   const [ptaxLoading, setPtaxLoading] = useState(false);
-  const { dataFatoGerador, fase } = useReformaDate();
+  // Data do fato gerador = hoje. A lógica versionada (IBS/CBS por vigência)
+  // continua no motor/backend; apenas não é mais selecionável na interface.
+  const dataFatoGerador = new Date().toISOString().slice(0, 10);
   const { setEvidence } = useEvidence();
 
   // Busca a PTAX do dia na API do BCB e preenche o câmbio automaticamente.
@@ -103,11 +104,11 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
     setEngineRates(r);
     setEvidence({
       agent: 'costing',
-      titulo: `Custeio · NCM ${inputs.ncm || '—'} · ${fase.label}`,
+      titulo: `Custeio · NCM ${inputs.ncm || '—'}`,
       steps: [
         `Resolvi as alíquotas do NCM (${origem}): II ${r.iiPct}% · IPI ${r.ipiPct}% · PIS ${r.pisPct}% · COFINS ${r.cofinsPct}%.`,
         `ICMS ${r.icmsPct}% (UF de ${inputs.entryPort}) calculado "por dentro"; AFRMM ${r.afrmmPct}% e Taxa Siscomex aplicados.`,
-        `Regra IBS/CBS vigente em ${fase.label}: CBS ${r.reforma.cbsPct}% + IBS ${r.reforma.ibsPct}% ${r.reforma.cbsCompensavel ? '(compensáveis)' : '(impacto de caixa)'}.`,
+        `Regra IBS/CBS vigente: CBS ${r.reforma.cbsPct}% + IBS ${r.reforma.ibsPct}% ${r.reforma.cbsCompensavel ? '(compensáveis)' : '(impacto de caixa)'}.`,
       ],
       citations: [{ ref: 'LC 214/2025', nota: r.reforma.baseLegal }, { ref: 'Decreto 12.955/2026', nota: 'Base de cálculo do CBS/IBS (art. 13).' }],
     });
@@ -148,11 +149,6 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
     }
   };
 
-  // Time Machine: se já há resultado, recalcula ao mudar a fase da Reforma.
-  useEffect(() => {
-    if (showResult) calcular();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataFatoGerador]);
 
   const set = <K extends keyof LandedCostInputs>(key: K, value: LandedCostInputs[K]) =>
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -446,7 +442,6 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
                           <Sparkles className="h-3.5 w-3.5" /> Motor de custeio · alíquotas reais (mcat)
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-medium text-slate-500">{fase.label}{fase.provisional ? ' · provisório' : ''}</span>
                         </span>
                         {engineRates && (
                           <span className="font-mono text-[10px] text-slate-400">

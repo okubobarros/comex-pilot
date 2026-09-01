@@ -5,6 +5,9 @@
  * Dock de Agentes (estilo SO). Cada ícone é um agente invocável isoladamente
  * (roteamento dinâmico simulado no front — PRD §4.0). Clicar carrega o agente
  * na Área de Trabalho sem recarregar a página.
+ *
+ * Fica no FLUXO do layout (não `fixed`): assim ocupa espaço próprio no rodapé
+ * do shell e nunca sobrepõe os botões do chat ou do canvas.
  */
 import React from 'react';
 import { Calculator, FileText, MessageCircle, Network, Scale, Target } from 'lucide-react';
@@ -34,8 +37,8 @@ interface AgentDockProps {
 
 export default function AgentDock({ active, onSelect }: AgentDockProps) {
   return (
-    <div className="pointer-events-none fixed bottom-3 right-4 z-40 flex justify-end lg:right-[19rem]" id="os-agent-dock">
-      <div className="pointer-events-auto flex items-end gap-1.5 rounded-2xl border border-slate-200 bg-white/90 px-2 py-1.5 shadow-[0_8px_30px_rgba(15,23,42,0.12)] backdrop-blur">
+    <div className="z-30 flex shrink-0 justify-center border-t border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur" id="os-agent-dock">
+      <div className="flex items-end gap-1.5">
         {AGENTS.map((a) => {
           const isActive = active === a.id;
           return (
