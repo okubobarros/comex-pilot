@@ -971,8 +971,10 @@ def gerar_partes(d, limite_bytes=350_000):
 
     # --- Parte A: staging + dimensões ---
     a = [cab, DDL_STAGE, "", "-- Dimensões (idempotentes)"]
-    for lote in _valores(d["ports"], ["unlocode", "name", "country"], "ports"):
-        a.append(lote.rstrip(";") + "\non conflict (unlocode) do update set name = excluded.name;")
+    # lat/lon alimentam o mapa do Radar; exigem migrations/0004_freight_geo.sql.
+    for lote in _valores(d["ports"], ["unlocode", "name", "country", "lat", "lon"], "ports"):
+        a.append(lote.rstrip(";") + "\non conflict (unlocode) do update set"
+                 " name = excluded.name, lat = excluded.lat, lon = excluded.lon;")
     for lote in _valores(d["carriers"], ["code", "name"], "carriers"):
         a.append(lote.rstrip(";") + "\non conflict (code) do update set name = excluded.name;")
     partes = [("0004_freight_a_stage.sql", "\n".join(a) + "\n")]

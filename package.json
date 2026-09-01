@@ -13,7 +13,8 @@
     "check:neo4j": "node scripts/check_neo4j.mjs",
     "test:freight": "tsx scripts/test_freight.ts",
     "etl:freight": "python scripts/etl/parse_rate_sheet.py",
-    "load:freight": "node scripts/load_freight.mjs"
+    "load:freight": "node scripts/load_freight.mjs",
+    "test:sql": "node scripts/test_sql.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -30,6 +31,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.20.0",

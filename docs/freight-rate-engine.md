@@ -263,21 +263,24 @@ Confirmar com o armador antes de tratar como compromisso contratual.
 - `Uruguay!L56`: HPL a USD 1.450 no 40'NOR — implausível para contêiner e com
   validade de abril.
 
-**Nenhum dos dois caminhos de carga foi executado contra um Postgres vivo**
-nesta entrega (Docker indisponível no ambiente, e o `DATABASE_URL` do `.env`
-local é um placeholder). O que foi verificado:
+**O SQL é executado contra um PostgreSQL real nos testes** (`npm run test:sql`).
 
-- **Sintaxe**: `migrations/0003_freight.sql` e as 4 partes do seed passam pelo
-  parser real do PostgreSQL (`libpg_query`, o mesmo que o servidor usa), e o
-  corpo PL/pgSQL do bloco `DO` passa pelo parser de PL/pgSQL.
-- **Contagens**: as tuplas geradas batem linha a linha com o JSON nas 7 tabelas.
-- **Rede de segurança**: a parte C aborta com rollback se as contagens gravadas
-  divergirem das esperadas, e o `load_freight.mjs` faz a mesma checagem dentro
-  da transação. Uma carga parcial não fica de pé.
+Validar sintaxe com um parser não bastava: duas falhas chegaram ao usuário
+justamente por passarem no parser e quebrarem só na execução —
+`relation "mcat._stage_route" does not exist` (a parte C não sobrevivia a uma
+segunda execução) e `42P16: cannot change name of view column` (`CREATE OR
+REPLACE VIEW` só aceita colunas novas no fim). Uma terceira apareceu no primeiro
+teste: o seed não estava gravando `lat`/`lon`.
 
-O que resta sem prova é a execução semântica (resolução de FKs, conversão de
-tipos). A base embarcada, essa sim, está exercitada de ponta a ponta pela UI e
-pelos testes.
+`scripts/test_sql.mjs` roda as duas migrations e as quatro partes do seed contra
+**PGlite** — o próprio PostgreSQL compilado para WASM, em processo, sem Docker —
+e depois confere: contagens contra o JSON do ETL, a consulta que a aplicação faz,
+a preservação do override por POD, a consulta do modo `FREIGHT_SOURCE=db`, e a
+re-execução da parte C.
+
+Continua sem cobrir: extensões e roles específicos do Supabase (o teste cria
+`anon`/`authenticated`/`service_role` na mão), RLS sob um usuário autenticado, e
+o comportamento sob a versão exata do Postgres do projeto.
 
 **Não há integração com API de armador.** A base é uma foto da planilha recebida;
 não se atualiza sozinha. Cada nova rate sheet exige rodar o ETL.

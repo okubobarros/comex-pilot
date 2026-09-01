@@ -1,5 +1,5 @@
 -- GERADO POR scripts/etl/parse_rate_sheet.py — NÃO EDITAR À MÃO.
--- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T16:27:18
+-- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T17:18:19
 -- ============================================================================
 -- PARTE C — carga definitiva (rode por ÚLTIMO)
 -- Tudo em conjuntos: 6 INSERTs cobrem as ~5.600 linhas. Transação única —

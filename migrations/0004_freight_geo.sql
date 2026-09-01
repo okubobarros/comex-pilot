@@ -17,8 +17,14 @@ alter table mcat.ports add column if not exists lon numeric(8,5);
 comment on column mcat.ports.lat is 'Latitude do porto, em graus decimais (WGS84).';
 comment on column mcat.ports.lon is 'Longitude do porto, em graus decimais (WGS84).';
 
--- A view precisa ser recriada para expor as colunas novas ao Radar.
-create or replace view v_freight_quotes as
+-- A view precisa ser RECRIADA, não substituída: CREATE OR REPLACE VIEW só
+-- aceita acrescentar colunas no FIM da lista, e as colunas de geografia entram
+-- ao lado dos respectivos portos (pol_country/pol_lat/pol_lon logo após pol_name).
+-- Sem o DROP, o Postgres recusa com 42P16 "cannot change name of view column".
+-- O DROP é seguro aqui: nada mais depende desta view.
+drop view if exists v_freight_quotes;
+
+create view v_freight_quotes as
 select
   er.id                                        as quote_id,
   fr.id                                        as route_id,
