@@ -127,8 +127,17 @@ export async function conformidadeCompleta(code: string): Promise<OrgaoAnuenteAg
   const [pu, orgao] = await Promise.all([tasPortalUnico(code), tasPorOrgao(code)]);
   const todos = [...pu, ...orgao];
 
+  // O mesmo TA costuma vir das duas camadas (ex.: INMETRO I0968). Mantemos a
+  // versão do Portal Único, que traz as exigências das condições.
+  const vistos = new Map<string, TratamentoDetalhado>();
+  todos.forEach((t) => {
+    const chave = `${t.orgao}|${t.ta_numero ?? t.ta_id ?? Math.random()}`;
+    const atual = vistos.get(chave);
+    if (!atual || (atual.fonte === 'orgao' && t.fonte === 'portal_unico')) vistos.set(chave, t);
+  });
+
   const mapa = new Map<string, TratamentoDetalhado[]>();
-  todos.forEach((t) => mapa.set(t.orgao, [...(mapa.get(t.orgao) ?? []), t]));
+  [...vistos.values()].forEach((t) => mapa.set(t.orgao, [...(mapa.get(t.orgao) ?? []), t]));
 
   return [...mapa.entries()]
     .map(([sigla, tratamentos]) => ({

@@ -10,8 +10,10 @@
  * do shell e nunca sobrepõe os botões do chat ou do canvas.
  */
 import React from 'react';
-import { Calculator, FileText, MessageCircle, Network, Scale, Target } from 'lucide-react';
+import { Calculator, FileText, Network, Scale, Target } from 'lucide-react';
 
+// 'chat' permanece no tipo (rotas/mapas ainda o referenciam), mas saiu do Dock:
+// o Painel de Comando já é o assistente, não precisa de um ícone próprio.
 export type AgentId = 'audit' | 'costing' | 'ncm' | 'compliance' | 'li' | 'chat';
 
 interface AgentDef {
@@ -27,7 +29,6 @@ const AGENTS: AgentDef[] = [
   { id: 'ncm', label: 'Classificador NCM', camada: 'Raciocínio Regulatório', icon: <Scale className="h-5 w-5" /> },
   { id: 'compliance', label: 'Conformidade', camada: 'Anuência (SAT-Graph)', icon: <Network className="h-5 w-5" /> },
   { id: 'li', label: 'Gerador de LI', camada: 'Justificativa + Ação', icon: <FileText className="h-5 w-5" /> },
-  { id: 'chat', label: 'Assistente Geral', camada: 'Dúvidas avulsas', icon: <MessageCircle className="h-5 w-5" /> },
 ];
 
 interface AgentDockProps {

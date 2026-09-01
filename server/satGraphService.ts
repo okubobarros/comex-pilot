@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express';
 import { getDriver } from './neo4j.js';
 import { getNcmInfo, getOrgaosAtivos, getStats, getTaPorNcm } from './satGraph.js';
+import { conformidadeCompleta } from './ncmCompliance.js';
 
 /** Resumo da config em uso (nunca expõe a senha) — ajuda a diagnosticar 401. */
 function configResumo() {
@@ -55,9 +56,37 @@ export async function satGraphNcmHandler(req: Request, res: Response): Promise<v
       res.status(404).json({ success: false, error: `NCM ${code} não encontrado no grafo.` });
       return;
     }
-    const tratamentos = await getTaPorNcm(code);
-    const orgaos = new Set(tratamentos.map((t) => t.orgao_npi).filter(Boolean));
-    res.json({ success: true, ncm, tratamentos, total_orgaos: orgaos.size });
+    // Travessia profunda (Portal Único + camada por órgão), achatada no formato
+    // que a tela espera — assim a Conformidade tem o mesmo detalhe que o
+    // Classificador: número do TA, tipo (Requer LPCO/Alerta), exigências e base legal.
+    const agrupado = await conformidadeCompleta(code);
+    const tratamentos = agrupado.flatMap((o) =>
+      o.tratamentos.map((t) => ({
+        orgao_label: o.orgao,
+        orgao_npi: o.orgao,
+        orgao_nome: o.orgao_nome,
+        ta_id: t.ta_numero ?? t.ta_id,
+        tipo_ta: t.tipo_ta,
+        modelo: null,
+        // O Portal Único não traz "impede_desembaraço"; exigir LPCO é o
+        // equivalente operacional (sem o licenciamento, não há registro).
+        impede_desembaraco: (t.tipo_ta ?? '').toLowerCase().includes('lpco') ? 'Sim' : null,
+        base_legal: t.base_legal,
+        vigencia: t.vigencia,
+        prazo: null,
+        inspecao: t.permite_inspecao,
+        exigencias: t.exigencias,
+        fonte: t.fonte,
+      })),
+    );
+    res.json({
+      success: true,
+      ncm,
+      tratamentos,
+      orgaosAnuentes: agrupado,
+      exige_lpco: agrupado.some((o) => o.exige_lpco),
+      total_orgaos: agrupado.length,
+    });
   } catch (err) {
     console.error('satGraphNcm', err);
     res.status(502).json({ success: false, error: String((err as Error).message || err), config: configResumo() });
