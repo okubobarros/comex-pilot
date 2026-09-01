@@ -10,12 +10,12 @@ import express, { Request, Response } from "express";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import { COSMETICS_DATABASE } from "../src/data/cosmeticsDb";
-import { costingHandler } from "./costingService";
-import { ptaxHandler } from "./ptaxService";
-import { normaHandler } from "./normaService";
-import { satGraphTestHandler, satGraphNcmHandler } from "./satGraphService";
-import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./llm";
+import { COSMETICS_DATABASE } from "../src/data/cosmeticsDb.js";
+import { costingHandler } from "./costingService.js";
+import { ptaxHandler } from "./ptaxService.js";
+import { normaHandler } from "./normaService.js";
+import { satGraphTestHandler, satGraphNcmHandler } from "./satGraphService.js";
+import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./llm.js";
 
 dotenv.config();
 

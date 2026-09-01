@@ -7,7 +7,7 @@
  */
 import type { Request, Response } from 'express';
 import pg from 'pg';
-import { computeCosting, CostingRates, Modal, ReformaRegra } from '../src/engine/costing';
+import { computeCosting, CostingRates, Modal, ReformaRegra } from '../src/engine/costing.js';
 
 let pool: pg.Pool | null = null;
 function getPool(): pg.Pool | null {

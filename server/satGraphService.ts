@@ -5,8 +5,8 @@
  * Rotas do SAT-Graph: teste de conexão e consulta de conformidade por NCM.
  */
 import type { Request, Response } from 'express';
-import { getDriver } from './neo4j';
-import { getNcmInfo, getOrgaosAtivos, getStats, getTaPorNcm } from './satGraph';
+import { getDriver } from './neo4j.js';
+import { getNcmInfo, getOrgaosAtivos, getStats, getTaPorNcm } from './satGraph.js';
 
 function ensureConfigured(res: Response): boolean {
   if (!getDriver()) {

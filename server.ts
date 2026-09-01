@@ -9,7 +9,7 @@
 
 import express, { Request, Response } from "express";
 import path from "path";
-import app from "./server/app";
+import app from "./server/app.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 

@@ -16,7 +16,7 @@
  * descricao/procedimento_*. Por isso normalizamos aqui, derivando o órgão do
  * label (sempre confiável) e mapeando os campos equivalentes.
  */
-import { query } from './neo4j';
+import { query } from './neo4j.js';
 
 /** Label do nó → nome do órgão anuente. */
 const ORGAO_POR_LABEL: Record<string, string> = {
