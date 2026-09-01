@@ -23,11 +23,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowRight, ArrowRightLeft, Bookmark, Calculator, Check, Clock,
-  FileText, Loader2, Map as MapIcon, Printer, Search, Send, Ship, TrendingDown,
-  Trophy, X, Zap,
+  FileText, Loader2, Map as MapIcon, Printer, Search, Send, Ship, Timer,
+  TrendingDown, Trophy, X, Zap,
 } from 'lucide-react';
 import { useEvidence } from '../../context/EvidenceContext';
 import FreightRadar, { Corredor } from './FreightRadar';
+import FreightMap, { ArcoRota } from './FreightMap';
+import { estimarTransito } from '../../engine/freight';
 import type { Cotacao, LinhaCusto } from '../../engine/freight';
 
 interface FreightWorkspaceProps {
@@ -48,7 +50,7 @@ interface Options {
   fonte: string;
 }
 
-type Vista = 'lista' | 'mapa';
+type Vista = 'mapa' | 'lista';
 type Aba = 'recomendadas' | 'rapidas' | 'baratas';
 
 const usd = (v: number) =>
@@ -69,10 +71,13 @@ const ABAS: { id: Aba; label: string; icone: React.ReactNode; nota: string }[] =
   { id: 'recomendadas', label: 'Recomendadas', icone: <Trophy className="h-3.5 w-3.5" />,
     nota: 'Vigência primeiro, depois custo total.' },
   { id: 'rapidas', label: 'Mais rápidas', icone: <Zap className="h-3.5 w-3.5" />,
-    nota: 'Serviço direto antes de transbordo — a rate sheet não declara tempo de trânsito.' },
+    nota: 'Trânsito ESTIMADO por distância real entre os portos — a rate sheet não o declara.' },
   { id: 'baratas', label: 'Mais baratas', icone: <TrendingDown className="h-3.5 w-3.5" />,
     nota: 'Só o custo total, inclusive tarifas prestes a vencer.' },
 ];
+
+/** Identifica a ROTA (par de portos) de uma cotação — o arco do mapa. */
+const chaveArco = (c: Cotacao) => `${c.quote.pol}|${c.quote.pod}`;
 
 /** Free time: "21 / 18 dias". A planilha não diz o que é cada número — ver docs. */
 function freeTime(c: Cotacao): string {
@@ -85,8 +90,8 @@ function freeTime(c: Cotacao): string {
 function BadgeArmador({ code, destaque }: { code: string; destaque?: boolean }) {
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold tracking-tight ${
-        destaque ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-500'
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-xs font-bold tracking-tight ${
+        destaque ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200/80 bg-slate-50 text-slate-600'
       }`}
       title={code}
     >
@@ -97,7 +102,8 @@ function BadgeArmador({ code, destaque }: { code: string; destaque?: boolean }) 
 
 export default function FreightWorkspace({ onClose, onExportarParaCusteio }: FreightWorkspaceProps) {
   const { setEvidence } = useEvidence();
-  const [vista, setVista] = useState<Vista>('lista');
+  // Mapa é a visão padrão: o corredor inteiro cabe numa olhada.
+  const [vista, setVista] = useState<Vista>('mapa');
   const [aba, setAba] = useState<Aba>('recomendadas');
 
   const [opts, setOpts] = useState<Options | null>(null);
@@ -116,6 +122,8 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
   const [selecionada, setSelecionada] = useState<Cotacao | null>(null);
   const [booking, setBooking] = useState<Cotacao | null>(null);
   const [buscaSalva, setBuscaSalva] = useState(false);
+  /** Rede completa de corredores — desenha o mapa antes da primeira busca. */
+  const [rede, setRede] = useState<Corredor[]>([]);
 
   useEffect(() => {
     fetch('/api/freight/options')
@@ -135,6 +143,12 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
         } catch { /* storage indisponível: segue sem retomar */ }
       })
       .catch((e) => setErro(String(e)));
+
+    // O canvas nunca abre vazio: sem busca ainda, mostra a rede inteira.
+    fetch('/api/freight/radar?equipamento=40HQ')
+      .then((r) => r.json())
+      .then((d) => setRede(d.corredores ?? []))
+      .catch(() => { /* mapa fica só com os continentes */ });
   }, []);
 
   const buscar = async (over?: { pol: string; pod: string }) => {
@@ -212,12 +226,51 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
     const copia = [...l];
     if (aba === 'baratas') return copia.sort((a, b) => a.totalUsd - b.totalUsd);
     if (aba === 'rapidas') {
-      // Sem tempo de trânsito na planilha, "rápido" = serviço direto.
-      const peso = (c: Cotacao) => (c.quote.service_type === 'Direct' ? 0 : 1);
-      return copia.sort((a, b) => peso(a) - peso(b) || a.totalUsd - b.totalUsd);
+      // Ordena pelo trânsito ESTIMADO (distância real + penalidade de
+      // transbordo). Sem coordenadas, a cotação vai para o fim.
+      const dias = (c: Cotacao) => estimarTransito(c.quote)?.dias ?? 9_999;
+      return copia.sort((a, b) => dias(a) - dias(b) || a.totalUsd - b.totalUsd);
     }
     return copia; // já vem ordenada por vigência + custo do backend
   }, [cotacoes, aba, servico]);
+
+  /**
+   * Arcos do mapa: as rotas da busca atual (uma por par de portos, com o menor
+   * frete) ou, antes da primeira busca, a rede inteira de corredores.
+   */
+  /** Rede inteira convertida em arcos — fundo do mapa e fallback sem busca. */
+  const arcosDaRede = useMemo<ArcoRota[]>(
+    () => [...rede]
+      .sort((a, b) => a.minUsd - b.minUsd)
+      .slice(0, 90)
+      .map((c) => ({
+        chave: `${c.pol}|${c.pod}`,
+        pol: c.pol, polName: c.polName, polLat: c.polLat, polLon: c.polLon,
+        pod: c.pod, podName: c.podName, podLat: c.podLat, podLon: c.podLon,
+        menorUsd: c.minUsd, carrier: c.melhorCarrier,
+      })),
+    [rede],
+  );
+
+  const arcos = useMemo<ArcoRota[]>(() => {
+    if (cotacoes?.length) {
+      const m = new Map<string, ArcoRota>();
+      for (const c of cotacoes) {
+        const k = chaveArco(c);
+        const atual = m.get(k);
+        if (atual && atual.menorUsd <= c.totalUsd) continue;
+        const q = c.quote;
+        m.set(k, {
+          chave: k,
+          pol: q.pol, polName: q.pol_name, polLat: q.pol_lat, polLon: q.pol_lon,
+          pod: q.pod, podName: q.pod_name, podLat: q.pod_lat, podLon: q.pod_lon,
+          menorUsd: c.totalUsd, carrier: q.carrier,
+        });
+      }
+      return [...m.values()];
+    }
+    return arcosDaRede;
+  }, [cotacoes, arcosDaRede]);
 
   const maisBarata = useMemo(
     () => (lista.length ? Math.min(...lista.map((c) => c.totalUsd)) : 0),
@@ -388,84 +441,92 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
         </div>
       </header>
 
-      {/* ---------- Corpo ---------- */}
-      {vista === 'mapa' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <FreightRadar onAbrirCorredor={abrirCorredor} />
+      {/* ---------- Canvas do mapa ---------- */}
+      {vista === 'mapa' && (
+        <div className="shrink-0 px-6 pt-3">
+          <FreightMap
+            arcos={arcos}
+            contexto={cotacoes?.length ? arcosDaRede : []}
+            selecionada={selecionada ? chaveArco(selecionada) : null}
+            onSelecionarRota={(a) => {
+              const alvo = (cotacoes ?? []).find((c) => chaveArco(c) === a.chave);
+              if (alvo) setSelecionada(alvo);
+              else buscar({ pol: a.pol, pod: a.pod });
+            }}
+            titulo={cotacoes ? 'Rotas da busca' : 'Rede de corredores'}
+            altura={330}
+          />
         </div>
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          {/* Coluna esquerda — opções ranqueadas */}
-          <div className="flex min-w-0 flex-[65] flex-col overflow-hidden">
-            <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-6 py-2">
-              {ABAS.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => setAba(a.id)}
-                  title={a.nota}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                    aba === a.id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  {a.icone}{a.label}
-                </button>
-              ))}
-              {cotacoes && (
-                <span className="ml-auto text-[11px] text-slate-400">
-                  {lista.length} {lista.length === 1 ? 'opção' : 'opções'}
-                </span>
-              )}
-            </div>
+      )}
 
-            <p className="shrink-0 bg-white px-6 pb-2 text-[10px] leading-relaxed text-slate-400">
-              {ABAS.find((a) => a.id === aba)!.nota}
-            </p>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
-              {erro && (
-                <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {erro}
-                </div>
-              )}
-
-              {!cotacoes && !erro && (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 py-16 text-center">
-                  <Ship className="mx-auto h-7 w-7 text-slate-300" />
-                  <p className="mt-2 text-sm font-medium text-slate-500">Escolha origem, destino e equipamento</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Informe o peso para que as faixas de tarifa e as taxas de excesso entrem no total.
-                  </p>
-                </div>
-              )}
-
-              {cotacoes && lista.length === 0 && (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 py-16 text-center">
-                  <p className="text-sm font-medium text-slate-500">Nenhuma tarifa atende aos filtros.</p>
-                  <p className="mt-1 text-xs text-slate-400">Tente afrouxar o modo de serviço ou incluir tarifas expiradas.</p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {/* O `key` vai no wrapper: o projeto não tem @types/react
-                    instalado, então TS checa props de componente próprio sem
-                    conhecer o atributo especial do JSX. */}
-                {lista.map((c, i) => (
-                  <div key={c.quote.quote_id}>
-                    <CardOpcao
-                      c={c}
-                      posicao={i}
-                      ehMaisBarata={c.totalUsd === maisBarata}
-                      selecionada={selecionada?.quote.quote_id === c.quote.quote_id}
-                      onSelecionar={() => setSelecionada(c)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* ---------- Split view ---------- */}
+      <div className="flex min-h-0 flex-1 gap-4 px-6 pb-4 pt-3">
+        {/* Coluna esquerda — opções ranqueadas */}
+        <div className="flex min-w-0 flex-[60] flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center gap-1 pb-2">
+            {ABAS.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => setAba(a.id)}
+                title={a.nota}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors duration-150 ${
+                  aba === a.id ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                }`}
+              >
+                {a.icone}{a.label}
+              </button>
+            ))}
+            {cotacoes && (
+              <span className="ml-auto text-[11px] text-slate-400">
+                {lista.length} {lista.length === 1 ? 'opção' : 'opções'}
+              </span>
+            )}
           </div>
+          <p className="shrink-0 pb-2 text-[10px] leading-relaxed text-slate-400">
+            {ABAS.find((a) => a.id === aba)!.nota}
+          </p>
 
-          {/* Coluna direita — detalhamento fixo */}
-          <div className="hidden min-w-[320px] flex-[35] border-l border-slate-200 bg-white lg:block">
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+            {erro && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {erro}
+              </div>
+            )}
+
+            {!cotacoes && !erro && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 py-14 text-center">
+                <Ship className="mx-auto h-8 w-8 stroke-1 text-slate-300" />
+                <p className="mt-2 text-sm font-semibold text-slate-600">Escolha origem, destino e equipamento</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Informe o peso para que as faixas de tarifa e as taxas de excesso entrem no total.
+                </p>
+              </div>
+            )}
+
+            {cotacoes && lista.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 py-14 text-center">
+                <p className="text-sm font-semibold text-slate-600">Nenhuma tarifa atende aos filtros.</p>
+                <p className="mt-1 text-xs text-slate-400">Afrouxe o modo de serviço ou inclua tarifas expiradas.</p>
+              </div>
+            )}
+
+            {lista.map((c, i) => (
+              <div key={c.quote.quote_id}>
+                <CardOpcao
+                  c={c}
+                  posicao={i}
+                  ehMaisBarata={c.totalUsd === maisBarata}
+                  selecionada={selecionada?.quote.quote_id === c.quote.quote_id}
+                  onSelecionar={() => setSelecionada(c)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Coluna direita — card flutuante de detalhamento */}
+        <div className="hidden w-[38%] min-w-[300px] shrink-0 lg:block">
+          <div className="sticky top-0 flex max-h-full flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
             <PainelDetalhe
               c={selecionada}
               onBooking={() => selecionada && setBooking(selecionada)}
@@ -479,7 +540,7 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
             />
           </div>
         </div>
-      )}
+      </div>
 
       {booking && <ModalBooking c={booking} onClose={() => setBooking(null)} />}
     </section>
@@ -525,61 +586,72 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
   const st = STATUS_UI[c.status] ?? STATUS_UI.sem_validade;
   const taxas = c.totalUsd - c.tarifaAplicada;
   const direto = q.service_type === 'Direct';
+  const transito = estimarTransito(q);
 
   return (
     <button
       onClick={onSelecionar}
-      className={`group block w-full rounded-xl border bg-white p-3 text-left shadow-sm transition-all duration-150 hover:border-sky-300 hover:shadow-md ${
-        selecionada ? 'border-sky-400 ring-1 ring-sky-200' : 'border-slate-200'
+      className={`group block w-full rounded-xl border bg-white p-4 text-left transition-all duration-150 hover:-translate-y-px hover:border-indigo-300 hover:shadow-md ${
+        selecionada
+          ? 'border-indigo-400 shadow-md ring-1 ring-indigo-100'
+          : 'border-slate-200/80 shadow-sm'
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3.5">
         <BadgeArmador code={q.carrier} destaque={posicao === 0} />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-sm font-semibold text-slate-900">{q.carrier}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-semibold tracking-tight text-slate-900">{q.carrier}</span>
             {posicao === 0 && (
-              <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+              <span className="rounded-md bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                 #1 recomendada
               </span>
             )}
             {ehMaisBarata && posicao !== 0 && (
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+              <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                 menor custo
-              </span>
-            )}
-            {posicao === 1 && direto && (
-              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700">
-                serviço direto
               </span>
             )}
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
-            <span className="inline-flex items-center gap-1">
-              {q.pol_name} <ArrowRight className="h-3 w-3 text-slate-300" /> {q.pod_name}
+          {/* Rota, trânsito e modo — a linha que responde "serve para mim?" */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-slate-600">
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <Ship className="h-3.5 w-3.5 text-slate-300" />
+              {q.pol_name} <ArrowRight className="h-3.5 w-3.5 text-slate-300" /> {q.pod_name}
             </span>
+            {transito && (
+              <>
+                <span className="text-slate-200">|</span>
+                <span
+                  className="inline-flex items-center gap-1 text-slate-500"
+                  title={transito.premissa}
+                >
+                  <Timer className="h-3.5 w-3.5" /> ~{transito.dias} dias
+                  <span className="text-[10px] text-slate-400">(est.)</span>
+                </span>
+              </>
+            )}
             <span className="text-slate-200">|</span>
-            <span className="inline-flex items-center gap-1 text-slate-500">
-              <Clock className="h-3 w-3" /> free time {freeTime(c)}
-            </span>
-            <span className="text-slate-200">|</span>
-            <span className={direto ? 'text-slate-500' : 'text-amber-600'}>
+            <span className={direto ? 'text-slate-500' : 'font-medium text-amber-600'}>
               {direto ? 'Direto' : q.service_type === 'Transhipment' ? 'Transbordo' : (q.service_name || '—')}
             </span>
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">
               {q.equipment_type}
             </span>
-            <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ${st.chip}`}>
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+              <Clock className="h-2.5 w-2.5" /> free time {freeTime(c)}
+            </span>
+            <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium ring-1 ${st.chip}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
               {st.label}{q.validity_end ? ` até ${q.validity_end.slice(5).replace('-', '/')}` : ''}
             </span>
             {c.alertas.length > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-100">
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-100">
                 <AlertTriangle className="h-2.5 w-2.5" /> {c.alertas.length} ressalva(s)
               </span>
             )}
@@ -587,18 +659,18 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
         </div>
 
         <div className="shrink-0 text-right">
-          <span className="block font-display text-lg font-semibold tabular-nums text-emerald-600">
+          <span className="block font-display text-xl font-bold tabular-nums tracking-tight text-emerald-600">
             {usd(c.totalUsd)}
           </span>
-          <span className="block text-[10px] text-slate-400">
-            frete {usd(c.tarifaAplicada)}{taxas > 0 ? ` + taxas ${usd(taxas)}` : ''}
+          <span className="mt-0.5 block text-[11px] text-slate-400">
+            frete {usd(c.tarifaAplicada)}{taxas > 0 ? ` + ${usd(taxas)}` : ''}
           </span>
           {c.descontoPeso > 0 && (
-            <span className="mt-0.5 block text-[10px] font-medium text-emerald-600">
-              −{usd(c.descontoPeso)} por faixa de peso
+            <span className="mt-1 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+              −{usd(c.descontoPeso)} por peso
             </span>
           )}
-          <span className="mt-1 inline-block text-[10px] font-semibold text-sky-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <span className="mt-1.5 block text-[11px] font-semibold text-indigo-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
             ver detalhes →
           </span>
         </div>
@@ -624,6 +696,7 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
 
   const q = c.quote;
   const st = STATUS_UI[c.status] ?? STATUS_UI.sem_validade;
+  const transito = estimarTransito(q);
 
   return (
     <div className="flex h-full flex-col">
@@ -632,8 +705,9 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
           <BadgeArmador code={q.carrier} destaque />
           <div className="min-w-0">
             <p className="font-display text-sm font-semibold text-slate-900">{q.carrier}</p>
-            <p className="truncate text-[11px] text-slate-500">
-              {q.pol_name} → {q.pod_name} · {q.equipment_type}
+            <p className="flex items-center gap-1.5 truncate text-xs text-slate-600">
+              <Ship className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+              {q.pol_name} <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" /> {q.pod_name}
             </p>
           </div>
         </div>
@@ -642,8 +716,16 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
             <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} /> {st.label}
           </span>
           <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
-            {q.service_name || q.service_type}
+            {q.equipment_type}
           </span>
+          {transito && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600"
+              title={transito.premissa}
+            >
+              <Timer className="h-2.5 w-2.5" /> ~{transito.dias} dias (est.)
+            </span>
+          )}
           <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
             <Clock className="h-2.5 w-2.5" /> free time {freeTime(c)}
           </span>
@@ -662,9 +744,11 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
               <span className="shrink-0 font-mono text-xs tabular-nums text-slate-700">{usd(l.valorUsd)}</span>
             </div>
           ))}
-          <div className="flex items-baseline justify-between bg-slate-50 px-3 py-2.5">
+          <div className="flex items-baseline justify-between bg-slate-50 px-3 py-3">
             <span className="text-xs font-semibold text-slate-700">Total estimado</span>
-            <span className="font-mono text-base font-bold tabular-nums text-emerald-600">{usd(c.totalUsd)}</span>
+            <span className="font-display text-2xl font-bold tabular-nums tracking-tight text-emerald-600">
+              {usd(c.totalUsd)}
+            </span>
           </div>
         </div>
 
@@ -684,6 +768,7 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
         <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Condições</p>
         <dl className="space-y-1.5 text-xs">
           <Linha rotulo="Free time" valor={freeTime(c)} />
+          <Linha rotulo="Serviço" valor={q.service_name || q.service_type} />
           <Linha rotulo="Validade" valor={q.validity_raw || '—'} />
           {q.vessel_ref && <Linha rotulo="Navio / viagem" valor={q.vessel_ref} />}
           {q.space_status && <Linha rotulo="Espaço" valor={q.space_status} />}
@@ -692,26 +777,28 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
         </dl>
       </div>
 
-      <footer className="shrink-0 space-y-1.5 border-t border-slate-200 p-3">
+      <footer className="shrink-0 space-y-2 border-t border-slate-200/80 bg-slate-50/50 p-3">
         <button
           onClick={onBooking}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-indigo-700"
         >
           <Send className="h-4 w-4" /> Solicitar booking
         </button>
-        <button
-          onClick={onCusteio}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:border-sky-300 hover:text-sky-700"
-        >
-          <Calculator className="h-4 w-4" /> Importar para Custeio
-        </button>
-        <button
-          onClick={() => window.print()}
-          title="Gera o PDF pela caixa de impressão do navegador"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:border-slate-300"
-        >
-          <Printer className="h-4 w-4" /> Salvar cotação em PDF
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onCusteio}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:border-sky-300 hover:text-sky-700"
+          >
+            <Calculator className="h-3.5 w-3.5" /> Importar para Custeio
+          </button>
+          <button
+            onClick={() => window.print()}
+            title="Gera o PDF pela caixa de impressão do navegador"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:border-slate-300"
+          >
+            <Printer className="h-3.5 w-3.5" /> PDF
+          </button>
+        </div>
       </footer>
     </div>
   );

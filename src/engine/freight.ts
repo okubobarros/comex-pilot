@@ -264,3 +264,65 @@ export function ordenarPorCusto(cs: Cotacao[]): Cotacao[] {
   const peso: Record<StatusValidade, number> = { vigente: 0, expirando: 1, sem_validade: 2, expirado: 3 };
   return [...cs].sort((a, b) => peso[a.status] - peso[b.status] || a.totalUsd - b.totalUsd);
 }
+
+/* ------------------------------------------------------------------ *
+ * Estimativa de tempo de trânsito
+ * ------------------------------------------------------------------ */
+
+/**
+ * A rate sheet NÃO declara tempo de trânsito — só free time, que é outra coisa
+ * (dias livres de sobreestadia no destino). Como a tela precisa comparar
+ * velocidade, a estimativa é derivada da distância REAL entre os portos, não de
+ * um número redondo por corredor.
+ *
+ * Premissas, todas visíveis ao usuário no rótulo "(est.)":
+ *   - distância ortodrômica entre POL e POD;
+ *   - fator 1,15 de desvio, porque a rota marítima contorna continentes
+ *     (Ásia–ECSA vai pelo Cabo da Boa Esperança);
+ *   - 16,5 nós de velocidade efetiva de porta-contêiner;
+ *   - 4 dias de manobra/atracação em serviço direto, 11 com transbordo.
+ *
+ * Calibração: Shanghai→Santos dá 33 dias; os serviços diretos reais desse par
+ * ficam entre 30 e 35. NÃO substitui o schedule do armador.
+ */
+const RAIO_TERRA_NM = 3440.065;
+const FATOR_DESVIO = 1.15;
+const NOS_EFETIVOS = 16.5;
+const DIAS_PORTO_DIRETO = 4;
+const DIAS_PORTO_TRANSBORDO = 11;
+
+const rad = (g: number) => (g * Math.PI) / 180;
+
+/** Distância ortodrômica em milhas náuticas. */
+export function distanciaNm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * RAIO_TERRA_NM * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+export interface Transito {
+  dias: number;
+  distanciaNm: number;
+  /** Sempre true: nenhum valor aqui vem da planilha. */
+  estimado: true;
+  premissa: string;
+}
+
+/** Estimativa de trânsito para uma cotação. Null quando faltam coordenadas. */
+export function estimarTransito(q: FreightQuote): Transito | null {
+  if (q.pol_lat == null || q.pol_lon == null || q.pod_lat == null || q.pod_lon == null) return null;
+  const nm = distanciaNm(q.pol_lat, q.pol_lon, q.pod_lat, q.pod_lon);
+  const transbordo = q.service_type === 'Transhipment';
+  const dias = (nm * FATOR_DESVIO) / (NOS_EFETIVOS * 24)
+    + (transbordo ? DIAS_PORTO_TRANSBORDO : DIAS_PORTO_DIRETO);
+  return {
+    dias: Math.round(dias),
+    distanciaNm: Math.round(nm),
+    estimado: true,
+    premissa: `${Math.round(nm).toLocaleString('pt-BR')} nm × 1,15 de desvio a ${NOS_EFETIVOS} nós, `
+      + `mais ${transbordo ? DIAS_PORTO_TRANSBORDO : DIAS_PORTO_DIRETO} dias de porto`
+      + `${transbordo ? ' (com transbordo)' : ''}. A rate sheet não declara trânsito.`,
+  };
+}

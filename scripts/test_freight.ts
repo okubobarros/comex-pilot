@@ -5,7 +5,7 @@
  * VGM × peso de mercadoria, taxas escalonadas de excesso e vigência. Os casos
  * usam células REAIS da rate sheet 0901 (aba e linha citadas em cada bloco).
  */
-import { cotar, ordenarPorCusto, pesoNaBase, FreightQuote, Surcharge } from '../src/engine/freight';
+import { cotar, distanciaNm, estimarTransito, ordenarPorCusto, pesoNaBase, FreightQuote, Surcharge } from '../src/engine/freight';
 
 let falhas = 0;
 const eq = (nome: string, got: unknown, exp: unknown) => {
@@ -112,6 +112,18 @@ contem('avisa restrição de carga', pneu.alertas, 'restrita a pneu');
 const lcl = cotar({ ...base, unit: 'CBM', equipment_type: 'LCL', base_rate: 1, adjusted_rate: null,
   weight_operator: null, weight_limit_ton: null, surcharges: [] }, { cbm: 12, hoje: HOJE });
 eq('LCL cobra por m³', lcl.totalUsd, 12);
+
+// ---- F: trânsito estimado (a planilha não declara — é derivado) ------------
+console.log('\nCaso F — trânsito estimado por distância real:');
+const perto = (a: number, b: number) => Math.abs(a - b) <= 60;
+eq('Shanghai->Santos ~10.026 nm', perto(distanciaNm(31.23, 121.47, -23.96, -46.33), 10026), true);
+const coordSSZ = { pol_lat: 31.23, pol_lon: 121.47, pod_lat: -23.96, pod_lon: -46.33 };
+const tDireto = estimarTransito({ ...base, ...coordSSZ })!;
+eq('33 dias — os serviços diretos reais desse par ficam entre 30 e 35', tDireto.dias, 33);
+eq('marcado como estimado', tDireto.estimado, true);
+const tTransbordo = estimarTransito({ ...base, ...coordSSZ, service_type: 'Transhipment' })!;
+eq('transbordo soma 7 dias sobre o direto', tTransbordo.dias - tDireto.dias, 7);
+eq('sem coordenadas não estima', estimarTransito({ ...base, pol_lat: null, pol_lon: null }), null);
 
 console.log(`\n${falhas === 0 ? 'TODOS OS TESTES PASSARAM' : `${falhas} FALHA(S)`}`);
 process.exit(falhas === 0 ? 0 : 1);

@@ -14,7 +14,8 @@
     "test:freight": "tsx scripts/test_freight.ts",
     "etl:freight": "python scripts/etl/parse_rate_sheet.py",
     "load:freight": "node scripts/load_freight.mjs",
-    "test:sql": "node scripts/test_sql.mjs"
+    "test:sql": "node scripts/test_sql.mjs",
+    "gen:mapa": "node scripts/gen_world_path.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -36,10 +37,13 @@
     "@types/node": "^22.14.0",
     "@types/pg": "^8.20.0",
     "autoprefixer": "^10.4.21",
+    "d3-geo": "^3.1.1",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
+    "topojson-client": "^3.1.0",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "world-atlas": "^2.0.2"
   }
 }
