@@ -38,9 +38,14 @@ export interface FreightQuote {
   trade_lane: string;
   pol: string;
   pol_name: string;
+  /** Coordenadas reais do porto — posicionam o Radar de Mercado. */
+  pol_lat: number | null;
+  pol_lon: number | null;
   pod: string;
   pod_name: string;
   pod_country: string;
+  pod_lat: number | null;
+  pod_lon: number | null;
   service_type: string;
   service_name: string | null;
   validity_start: string | null;
@@ -63,6 +68,12 @@ export interface FreightQuote {
   surcharges: Surcharge[];
   source_sheet: string;
   source_row: number;
+  /**
+   * Ressalvas que o ETL registrou para a LINHA de origem desta cotação. Sem
+   * isto a trilha de qualidade morre no banco: a tarifa de USD 1.015 de
+   * Chongqing (dígito faltando na planilha) chegaria à tela como oferta real.
+   */
+  data_issues?: { kind: string; severity: string; detail: string }[];
 }
 
 export interface ParamsCotacao {
@@ -230,6 +241,9 @@ export function cotar(q: FreightQuote, p: ParamsCotacao = {}): Cotacao {
     alertas.push(`Sem validade interpretável na planilha${q.validity_raw ? `: "${q.validity_raw}"` : ''}.`);
   }
   if (q.cargo_type) alertas.push(`Tarifa restrita a ${q.cargo_type.toLowerCase()} — não vale para carga geral.`);
+  for (const i of q.data_issues ?? []) {
+    alertas.push(`Qualidade do dado (${q.source_sheet}!L${q.source_row}): ${i.detail}`);
+  }
   if (q.carrier_scope?.includes('NAC')) alertas.push('Tarifa de contrato de conta nomeada (NAC): exige elegibilidade.');
 
   return {

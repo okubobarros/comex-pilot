@@ -41,6 +41,14 @@ type CotacaoJson = (typeof dataset)['quotes'][number];
 
 const PORTOS = new Map(dataset.ports.map((p) => [p.unlocode, p]));
 
+/** Ressalvas do ETL indexadas pela linha da planilha que as originou. */
+const ISSUES_POR_LINHA = new Map<string, { kind: string; severity: string; detail: string }[]>();
+for (const i of dataset.issues) {
+  const k = `${i.sheet}|${i.source_row}`;
+  ISSUES_POR_LINHA.set(k, [...(ISSUES_POR_LINHA.get(k) ?? []),
+    { kind: i.kind, severity: i.severity, detail: i.detail }]);
+}
+
 let cache: FreightQuote[] | null = null;
 
 function carregarEmbarcado(): FreightQuote[] {
@@ -58,8 +66,9 @@ function carregarEmbarcado(): FreightQuote[] {
       carrier: r.carrier,
       carrier_scope: r.carrier_scope ?? [],
       trade_lane: r.trade_lane,
-      pol: r.pol, pol_name: pol.name,
+      pol: r.pol, pol_name: pol.name, pol_lat: pol.lat, pol_lon: pol.lon,
       pod: r.pod, pod_name: pod.name, pod_country: pod.country,
+      pod_lat: pod.lat, pod_lon: pod.lon,
       service_type: r.service_type,
       service_name: r.service_name,
       validity_start: r.validity_start,
@@ -82,6 +91,7 @@ function carregarEmbarcado(): FreightQuote[] {
       surcharges: r.surcharges as Surcharge[],
       source_sheet: r.sheet,
       source_row: r.source_row,
+      data_issues: ISSUES_POR_LINHA.get(`${r.sheet}|${r.source_row}`) ?? [],
     } as FreightQuote];
   });
   return cache;
@@ -220,4 +230,123 @@ export function freightIssuesHandler(_req: Request, res: Response) {
     total: dataset.issues.length,
     issues: dataset.issues,
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * Radar de Mercado
+ * ------------------------------------------------------------------ */
+
+const mediana = (v: number[]): number => {
+  const s = [...v].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/**
+ * GET /api/freight/radar
+ *
+ * Visão de mercado por CORREDOR (par origem/destino), não por cotação: quantos
+ * armadores servem, qual a dispersão de preço entre eles e quanto da oferta
+ * está prestes a vencer.
+ *
+ * O `spread` é o sinal comercial central — um corredor com 30% de diferença
+ * entre o menor e o maior preço é dinheiro deixado na mesa por quem não cota.
+ *
+ * Params: equipamento (default 40HQ), peso (t), pesoBase (CARGO|VGM).
+ */
+export async function freightRadarHandler(req: Request, res: Response) {
+  try {
+    const q = req.query as Record<string, string>;
+    const equipAlvo = (q.equipamento || '40HQ').toUpperCase();
+    const params = {
+      pesoTon: num(q.peso),
+      pesoInformadoComo: (q.pesoBase === 'VGM' ? 'VGM' : 'CARGO') as 'VGM' | 'CARGO',
+    };
+
+    const linhas = (await carregar()).filter(
+      (l) => !l.cargo_type
+        && (l.equipment_type === equipAlvo || l.also_valid_for.includes(equipAlvo as never)),
+    );
+
+    // Expiradas ficam fora do retrato de mercado: não são oferta disponível.
+    // Tarifas com ressalva de QUALIDADE também: a de USD 1.015 de Chongqing é um
+    // dígito faltando na planilha e, deixada aqui, viraria um spread de 890% —
+    // uma leitura de mercado inventada a partir de um erro de digitação.
+    const todas = linhas.map((l) => cotar(l, params));
+    const suspeita = (c: (typeof todas)[number]) =>
+      (c.quote.data_issues ?? []).some((i) => i.kind === 'tarifa');
+    const excluidasPorQualidade = todas.filter((c) => c.status !== 'expirado' && suspeita(c)).length;
+    const vivas = todas.filter((c) => c.status !== 'expirado' && !suspeita(c));
+
+    const porCorredor = new Map<string, typeof vivas>();
+    for (const c of vivas) {
+      const k = `${c.quote.pol}|${c.quote.pod}`;
+      porCorredor.set(k, [...(porCorredor.get(k) ?? []), c]);
+    }
+
+    const corredores = [...porCorredor.values()].map((cs) => {
+      const valores = cs.map((c) => c.totalUsd);
+      const min = Math.min(...valores);
+      const max = Math.max(...valores);
+      const barato = cs.find((c) => c.totalUsd === min)!;
+      const caro = cs.find((c) => c.totalUsd === max)!;
+      const q0 = barato.quote;
+      return {
+        pol: q0.pol, polName: q0.pol_name, polLat: q0.pol_lat, polLon: q0.pol_lon,
+        pod: q0.pod, podName: q0.pod_name, podPais: q0.pod_country,
+        podLat: q0.pod_lat, podLon: q0.pod_lon,
+        cotacoes: cs.length,
+        armadores: new Set(cs.map((c) => c.quote.carrier)).size,
+        minUsd: min,
+        medianaUsd: Math.round(mediana(valores)),
+        maxUsd: max,
+        spreadPct: min > 0 ? Math.round(((max - min) / min) * 1000) / 10 : 0,
+        melhorCarrier: barato.quote.carrier,
+        piorCarrier: caro.quote.carrier,
+        expirando: cs.filter((c) => c.status === 'expirando').length,
+      };
+    }).sort((a, b) => b.spreadPct - a.spreadPct);
+
+    // Portos com o papel que exercem, para dimensionar os pontos no mapa.
+    const portos = new Map<string, {
+      unlocode: string; name: string; pais: string; lat: number | null; lon: number | null;
+      papel: 'POL' | 'POD'; corredores: number; menorUsd: number;
+    }>();
+    const anota = (
+      code: string, name: string, pais: string, lat: number | null, lon: number | null,
+      papel: 'POL' | 'POD', menor: number,
+    ) => {
+      const a = portos.get(code);
+      if (a) { a.corredores += 1; a.menorUsd = Math.min(a.menorUsd, menor); return; }
+      portos.set(code, { unlocode: code, name, pais, lat, lon, papel, corredores: 1, menorUsd: menor });
+    };
+    for (const c of corredores) {
+      anota(c.pol, c.polName, c.pol.slice(0, 2), c.polLat, c.polLon, 'POL', c.minUsd);
+      anota(c.pod, c.podName, c.podPais, c.podLat, c.podLon, 'POD', c.minUsd);
+    }
+
+    const spreads = corredores.map((c) => c.spreadPct).filter((s) => s > 0);
+    const precos = corredores.map((c) => c.minUsd);
+
+    res.json({
+      rateSheet: dataset.rate_sheet,
+      equipamento: equipAlvo,
+      kpis: {
+        corredores: corredores.length,
+        armadores: new Set(vivas.map((c) => c.quote.carrier)).size,
+        origens: [...portos.values()].filter((p) => p.papel === 'POL').length,
+        destinos: [...portos.values()].filter((p) => p.papel === 'POD').length,
+        cotacoes: vivas.length,
+        expirando: vivas.filter((c) => c.status === 'expirando').length,
+        spreadMedianoPct: spreads.length ? Math.round(mediana(spreads) * 10) / 10 : 0,
+        excluidasPorQualidade,
+        menorUsd: precos.length ? Math.min(...precos) : 0,
+        maiorUsd: precos.length ? Math.max(...precos) : 0,
+      },
+      portos: [...portos.values()],
+      corredores,
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 }

@@ -16,7 +16,7 @@ import { ptaxHandler } from "./ptaxService.js";
 import { normaHandler } from "./normaService.js";
 import { satGraphTestHandler, satGraphNcmHandler } from "./satGraphService.js";
 import { classifyHandler } from "./classifyService.js";
-import { freightOptionsHandler, freightQuotesHandler, freightIssuesHandler } from "./freightService.js";
+import { freightOptionsHandler, freightQuotesHandler, freightIssuesHandler, freightRadarHandler } from "./freightService.js";
 import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./llm.js";
 
 dotenv.config();
@@ -40,6 +40,7 @@ app.post("/api/classify", classifyHandler);
 app.get("/api/freight/options", freightOptionsHandler);
 app.get("/api/freight/quotes", freightQuotesHandler);
 app.get("/api/freight/issues", freightIssuesHandler);
+app.get("/api/freight/radar", freightRadarHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

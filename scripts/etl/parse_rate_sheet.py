@@ -130,6 +130,44 @@ PORTOS = {
     "PYASU": ("Assunção", "PY", ["asuncion"]),
 }
 
+
+# Coordenadas dos portos (lat, lon). Alimentam o Radar de Mercado: os arcos são
+# desenhados sobre posições geográficas REAIS, ainda que a curva entre origem e
+# destino seja esquemática — a planilha não descreve a derrota do navio.
+COORDENADAS = {
+    # China — costa
+    "CNTXG": (38.98, 117.78), "CNTAO": (36.07, 120.32), "CNSHA": (31.23, 121.47),
+    "CNNGB": (29.87, 121.55), "CNYTN": (22.58, 114.27), "CNSHK": (22.48, 113.90),
+    "CNSZX": (22.54, 114.06), "CNXMN": (24.48, 118.09), "CNFOC": (26.07, 119.30),
+    "CNDLC": (38.92, 121.63), "CNSWA": (23.35, 116.68), "CNZHA": (21.27, 110.36),
+    "CNQZH": (21.95, 108.62), "CNLYG": (34.60, 119.22),
+    # China — Delta do Rio das Pérolas
+    "CNHUA": (23.09, 113.42), "CNZSN": (22.52, 113.39), "CNXLN": (22.66, 113.25),
+    "CNZUH": (22.27, 113.58), "CNSHD": (22.80, 113.29), "CNJMN": (22.58, 113.08),
+    "CNSNS": (23.16, 112.90), "CNNSA": (22.80, 113.60), "CNGMI": (22.90, 112.89),
+    "CNFOS": (23.02, 113.12), "CNWUZ": (23.48, 111.28),
+    # China — Yangtzé e interior
+    "CNNKG": (32.06, 118.80), "CNNTG": (32.01, 120.86), "CNZJG": (31.88, 120.55),
+    "CNZHE": (32.19, 119.42), "CNYZH": (32.39, 119.42), "CNCZX": (31.81, 119.97),
+    "CNWHI": (31.35, 118.38), "CNAQG": (30.51, 117.05), "CNNCH": (28.68, 115.86),
+    "CNWUH": (30.59, 114.30), "CNYIC": (30.69, 111.29), "CNCKG": (29.56, 106.55),
+    "CNCNG": (31.65, 120.75), "CNJIA": (31.92, 120.28), "CNTAC": (31.45, 121.10),
+    "CNTZO": (32.49, 119.92), "CNJIU": (29.71, 116.00),
+    "HKHKG": (22.32, 114.17),
+    # Sudeste asiático
+    "MYPKG": (3.00, 101.39), "VNSGN": (10.77, 106.70), "THLCH": (13.08, 100.88),
+    "THBKK": (13.70, 100.52), "IDSRG": (-6.97, 110.42),
+    # Brasil
+    "BRSSZ": (-23.96, -46.33), "BRRIO": (-22.90, -43.20), "BRPNG": (-25.52, -48.51),
+    "BRNVT": (-26.90, -48.65), "BRIOA": (-26.11, -48.61), "BRITJ": (-26.91, -48.66),
+    "BRRIG": (-32.04, -52.10), "BRSUA": (-8.39, -34.96), "BRSSA": (-12.97, -38.51),
+    "BRPEC": (-3.55, -38.81), "BRVIX": (-20.32, -40.34), "BRMAO": (-3.13, -60.02),
+    "BRVLC": (-1.54, -48.75),
+    # Cone Sul
+    "UYMVD": (-34.90, -56.19), "ARBUE": (-34.60, -58.38), "PYASU": (-25.28, -57.63),
+}
+
+
 APELIDO_PARA_LOCODE = {}
 for _loc, (_nome, _pais, _apelidos) in PORTOS.items():
     for _a in _apelidos:
@@ -709,7 +747,9 @@ def processar(caminho: str, ano: int):
                         })
 
     saida["carriers"] = list(carriers.values())
-    saida["ports"] = [{"unlocode": loc, "name": PORTOS[loc][0], "country": PORTOS[loc][1]}
+    saida["ports"] = [{"unlocode": loc, "name": PORTOS[loc][0], "country": PORTOS[loc][1],
+                       "lat": COORDENADAS.get(loc, (None, None))[0],
+                       "lon": COORDENADAS.get(loc, (None, None))[1]}
                       for loc in sorted(usados)]
     return saida
 
@@ -805,6 +845,14 @@ declare
   v_rotas int;
   v_tarifas int;
 begin
+  -- Esta parte apaga o staging no fim, então rodá-la duas vezes encontraria as
+  -- tabelas ausentes. Em vez de falhar com "relation does not exist", avisa.
+  if to_regclass('mcat._stage_route') is null then
+    raise notice 'Staging ausente: a carga já foi executada (ou as partes A/B ainda não rodaram).';
+    raise notice 'Confira o resultado na consulta ao final deste arquivo.';
+    return;
+  end if;
+
   insert into mcat.rate_sheets (source_file, issued_on, currency, assumed_year)
   values ({sql_txt(rs['source_file'])}, {sql_txt(rs['issued_on'])}::date,
           {sql_txt(rs['currency'])}, {rs['assumed_year']})
@@ -878,8 +926,11 @@ drop table if exists mcat._stage_route, mcat._stage_rate, mcat._stage_surcharge,
 
 commit;
 
--- Confirmação: deve devolver {esperado_tarifas}.
-select count(*) as cotacoes from mcat.v_freight_quotes;
+-- Confirmação. Esperado: {esperado_tarifas} cotações, {esperado_rotas} rotas.
+select (select count(*) from mcat.v_freight_quotes)                as cotacoes,
+       (select count(*) from mcat.freight_routes)                  as rotas,
+       (select count(*) from mcat.rate_issues)                     as ressalvas,
+       (to_regclass('mcat._stage_route') is null)                  as staging_limpo;
 """
 
 

@@ -1,5 +1,5 @@
 -- GERADO POR scripts/etl/parse_rate_sheet.py — NÃO EDITAR À MÃO.
--- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T15:48:25
+-- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T16:27:18
 -- ============================================================================
 -- PARTE C — carga definitiva (rode por ÚLTIMO)
 -- Tudo em conjuntos: 6 INSERTs cobrem as ~5.600 linhas. Transação única —
@@ -14,6 +14,14 @@ declare
   v_rotas int;
   v_tarifas int;
 begin
+  -- Esta parte apaga o staging no fim, então rodá-la duas vezes encontraria as
+  -- tabelas ausentes. Em vez de falhar com "relation does not exist", avisa.
+  if to_regclass('mcat._stage_route') is null then
+    raise notice 'Staging ausente: a carga já foi executada (ou as partes A/B ainda não rodaram).';
+    raise notice 'Confira o resultado na consulta ao final deste arquivo.';
+    return;
+  end if;
+
   insert into mcat.rate_sheets (source_file, issued_on, currency, assumed_year)
   values ('rate sheet 0901.xlsx', '2026-09-01'::date,
           'USD', 2026)
@@ -87,5 +95,8 @@ drop table if exists mcat._stage_route, mcat._stage_rate, mcat._stage_surcharge,
 
 commit;
 
--- Confirmação: deve devolver 2966.
-select count(*) as cotacoes from mcat.v_freight_quotes;
+-- Confirmação. Esperado: 2966 cotações, 1273 rotas.
+select (select count(*) from mcat.v_freight_quotes)                as cotacoes,
+       (select count(*) from mcat.freight_routes)                  as rotas,
+       (select count(*) from mcat.rate_issues)                     as ressalvas,
+       (to_regclass('mcat._stage_route') is null)                  as staging_limpo;

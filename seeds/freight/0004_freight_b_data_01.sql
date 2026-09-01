@@ -1,5 +1,5 @@
 -- GERADO POR scripts/etl/parse_rate_sheet.py — NÃO EDITAR À MÃO.
--- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T15:48:25
+-- Fonte: rate sheet 0901.xlsx | importado em 2026-09-01T16:27:18
 -- PARTE B1 de 2 — dados para o staging.
 -- Rode as partes B em ordem, depois a parte C.
 set search_path to mcat, public;

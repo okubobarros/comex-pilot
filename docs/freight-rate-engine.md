@@ -124,6 +124,57 @@ geral: são preços restritos que puxariam a comparação para baixo indevidamen
 
 ---
 
+## 4b. Radar de Mercado
+
+`src/components/freight/FreightRadar.tsx` · `GET /api/freight/radar`
+
+A aba de cotação responde *"quanto custa esta rota"*. O Radar responde outra
+pergunta: *"onde o mercado está caro, concentrado ou disperso"*. O grão é o
+**corredor** (par origem/destino), não a cotação.
+
+O sinal central é o **spread** — a diferença percentual entre o menor e o maior
+preço no mesmo corredor. Spread alto é dinheiro deixado na mesa por quem fecha
+sem cotar. No arquivo atual: 370 corredores, spread mediano de 4,9%, com
+Manaus liderando a 30,1% (USD 2.750 de diferença entre COSCO e MSC).
+
+**Um exemplo do porquê o ranking é por custo total**, não por tarifa —
+Tianjin/Xingang → Manaus, 40'HQ:
+
+| Armador | Frete | Taxas | Total |
+|---|---|---|---|
+| COSCO | 9.100 | + 50 | **9.150** |
+| ONE | **9.000** | + 265 (CSS + SPG + PCT) | 9.265 |
+| MSC | 10.500 | + 1.400 (LWS Manaus) | 11.900 |
+
+A ONE tem o menor frete e perde. Quem compara pela coluna de tarifa erra.
+
+### O mapa
+
+Portos posicionados por **latitude/longitude reais**, em projeção
+equiretangular. Os arcos ligam origem e destino mas **não representam a derrota
+do navio** — a rate sheet não a descreve, e desenhar uma rota fictícia com
+aparência de precisa seria pior do que não desenhar. Pelo mesmo motivo não há
+contorno de continentes: só a grade de coordenadas e as regiões nomeadas.
+
+Rótulos de origem passam por um de-clutter geométrico: Shekou, Shenzhen,
+Yantian, Nansha e Hong Kong ficam a menos de meio grau umas das outras, então
+só a mais relevante de cada aglomerado recebe nome. O critério é a distância em
+pixels, não uma lista fixa — sobrevive à próxima rate sheet.
+
+### A trilha de qualidade chega até aqui
+
+Cotações cuja LINHA de origem tem ressalva do ETL (`kind = 'tarifa'`) ficam
+**fora** do radar, e o total excluído aparece no painel. Sem esse corte, a
+tarifa de Chongqing — o `1000` que deveria ser `10000` — produzia um spread de
+**889,7%** e um piso de mercado de USD 1.015. Com o corte, o piso é USD 8.700 e
+o topo do ranking passa a ser Manaus, que é um sinal comercial real.
+
+As mesmas ressalvas viajam com a cotação (`FreightQuote.data_issues`) e aparecem
+como alerta no painel lateral da aba de cotação.
+
+
+---
+
 ## 5. Como rodar
 
 ### ETL
@@ -136,6 +187,9 @@ Gera dois artefatos com o mesmo conteúdo:
 
 - `src/data/freightRates.json` — base embarcada, servida por padrão pela API
 - `seeds/freight/*.sql` — carga idempotente para o Postgres/Supabase
+
+> As coordenadas dos portos exigem `migrations/0004_freight_geo.sql` (colunas
+> `lat`/`lon` + view atualizada). Quem já aplicou a `0003` roda só a `0004`.
 
 ```bash
 npm run test:freight      # motor de cálculo (24 asserções)

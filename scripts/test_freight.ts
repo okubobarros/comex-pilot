@@ -23,7 +23,8 @@ const HOJE = '2026-09-01';
 
 const base: FreightQuote = {
   quote_id: 1, route_id: 1, carrier: 'PIL', carrier_scope: [], trade_lane: 'Brasil',
-  pol: 'CNXMN', pol_name: 'Xiamen', pod: 'BRIOA', pod_name: 'Itapoá', pod_country: 'BR',
+  pol: 'CNXMN', pol_name: 'Xiamen', pol_lat: 24.48, pol_lon: 118.09,
+  pod: 'BRIOA', pod_name: 'Itapoá', pod_country: 'BR', pod_lat: -26.11, pod_lon: -48.61,
   service_type: 'Direct', service_name: 'Direct',
   validity_start: '2026-09-01', validity_end: '2026-09-07', validity_raw: '9.01~9.07',
   vessel_ref: 'KOTA MACHAN 0551S', space_status: null,

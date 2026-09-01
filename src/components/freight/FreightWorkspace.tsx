@@ -13,10 +13,11 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowRight, Calculator, Clock, Loader2, Search, Ship,
+  AlertTriangle, ArrowRight, Calculator, Clock, Loader2, Radar, Search, Ship,
   SlidersHorizontal, TriangleAlert, X,
 } from 'lucide-react';
 import { useEvidence } from '../../context/EvidenceContext';
+import FreightRadar, { Corredor } from './FreightRadar';
 import type { Cotacao, LinhaCusto } from '../../engine/freight';
 
 interface FreightWorkspaceProps {
@@ -60,6 +61,7 @@ function freeTime(c: Cotacao): string {
 
 export default function FreightWorkspace({ onClose, onExportarParaCusteio }: FreightWorkspaceProps) {
   const { setEvidence } = useEvidence();
+  const [aba, setAba] = useState<'cotar' | 'radar'>('cotar');
   const [opts, setOpts] = useState<Options | null>(null);
   const [pol, setPol] = useState('');
   const [pod, setPod] = useState('');
@@ -80,14 +82,16 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
       .catch((e) => setErro(String(e)));
   }, []);
 
-  const buscar = async () => {
+  const buscar = async (over?: { pol: string; pod: string }) => {
     setCarregando(true);
     setErro(null);
     setAberta(null);
     try {
       const p = new URLSearchParams();
-      if (pol) p.set('pol', pol);
-      if (pod) p.set('pod', pod);
+      const polAlvo = over?.pol ?? pol;
+      const podAlvo = over?.pod ?? pod;
+      if (polAlvo) p.set('pol', polAlvo);
+      if (podAlvo) p.set('pod', podAlvo);
       if (equipamento) p.set('equipamento', equipamento);
       if (peso.trim()) { p.set('peso', peso.trim()); p.set('pesoBase', pesoBase); }
       if (carga) p.set('carga', carga);
@@ -130,6 +134,14 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
     });
   };
 
+  /** Vem do Radar: troca para a aba de cotação já com o corredor filtrado. */
+  const abrirCorredor = (c: Corredor) => {
+    setPol(c.pol);
+    setPod(c.pod);
+    setAba('cotar');
+    buscar({ pol: c.pol, pod: c.pod });
+  };
+
   const podsFiltrados = useMemo(() => opts?.pods ?? [], [opts]);
   const alertasNaBusca = useMemo(
     () => (cotacoes ?? []).reduce((n, c) => n + (c.alertas.length ? 1 : 0), 0),
@@ -162,6 +174,28 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
           </button>
         </div>
 
+        {/* Abas */}
+        <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+          {([['cotar', 'Cotar rota', <Search className="h-3.5 w-3.5" key="c" />],
+             ['radar', 'Radar de mercado', <Radar className="h-3.5 w-3.5" key="r" />]] as const).map(
+            ([id, label, icone]) => (
+              <button
+                key={id}
+                onClick={() => { setAba(id as 'cotar' | 'radar'); setAberta(null); }}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                  aba === id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                {icone}{label}
+              </button>
+            ),
+          )}
+        </div>
+
+        {aba === 'radar' ? (
+          <FreightRadar onAbrirCorredor={abrirCorredor} />
+        ) : (
+          <>
         {/* Filtros */}
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -357,6 +391,8 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
               Informe o peso para que as tarifas condicionais e as taxas de excesso entrem no total.
             </p>
           </div>
+        )}
+        </>
         )}
       </div>
 
