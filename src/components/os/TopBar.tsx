@@ -2,26 +2,25 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Top Bar do "OS Shell": cliente ativo e indicador de Confiança do Sistema.
+ * Top Bar do "OS Shell": identificação do ambiente/operação e indicador de
+ * Confiança do Sistema. Sem logo: a marca aparece uma única vez, na Sidebar.
  */
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
-import Logo from '../Logo';
 
 interface TopBarProps {
   cliente?: string;
   confianca?: number; // 0..100
 }
 
-export default function TopBar({ cliente = 'ComexPilot · Operação Demo', confianca = 92 }: TopBarProps) {
+export default function TopBar({ cliente = 'Operação Demo', confianca = 92 }: TopBarProps) {
   const confColor = confianca >= 80 ? 'text-emerald-600' : confianca >= 50 ? 'text-amber-600' : 'text-rose-600';
   const confDot = confianca >= 80 ? 'bg-emerald-500' : confianca >= 50 ? 'bg-amber-500' : 'bg-rose-500';
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:px-4" id="os-topbar">
-      {/* Cliente */}
+      {/* Ambiente/operação — a marca ComexPilot vive só na Sidebar, para não duplicar */}
       <div className="flex min-w-0 items-center gap-2">
-        <Logo className="h-6 w-6 shrink-0" />
         <span className="truncate text-xs font-semibold text-slate-700">{cliente}</span>
       </div>
 

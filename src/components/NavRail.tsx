@@ -67,11 +67,21 @@ const SECOES: RailSection[] = [
 
 export default function NavRail({ activeView, onNavigateHome, onOpenTask, activeTask }: NavRailProps) {
   const [expanded, setExpanded] = useState(false);
+  /**
+   * Home e Kanban levam à MESMA view ('home'), então a view sozinha não decide
+   * qual dos dois está ativo — marcava os dois de azul. Guardamos qual foi o
+   * último acionado para garantir seleção exclusiva.
+   */
+  const [itemHomeAtivo, setItemHomeAtivo] = useState<'home' | 'kanban'>('home');
 
   const acionar = (item: RailItem) => {
-    if (item.id === 'home') return onNavigateHome();
+    if (item.id === 'home') {
+      setItemHomeAtivo('home');
+      return onNavigateHome();
+    }
     if (item.id === 'kanban') {
       // O Kanban vive na Home: navega e rola até o pipeline.
+      setItemHomeAtivo('kanban');
       onNavigateHome();
       requestAnimationFrame(() =>
         document.getElementById('pipeline-processos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -81,10 +91,13 @@ export default function NavRail({ activeView, onNavigateHome, onOpenTask, active
     onOpenTask(item.id as TaskId);
   };
 
-  const estaAtivo = (item: RailItem) =>
-    item.id === 'home' || item.id === 'kanban'
-      ? activeView === 'home'
-      : activeView === 'workspace' && activeTask === item.id;
+  /** Exatamente UM item ativo por vez — comparação estrita em todos os ramos. */
+  const estaAtivo = (item: RailItem): boolean => {
+    if (item.id === 'home' || item.id === 'kanban') {
+      return activeView === 'home' && itemHomeAtivo === item.id;
+    }
+    return activeView === 'workspace' && activeTask === item.id;
+  };
 
   const labelClass = `min-w-0 overflow-hidden text-left transition-all duration-200 ${
     expanded ? 'ml-3 max-w-[150px] opacity-100' : 'ml-0 max-w-0 opacity-0'
@@ -100,7 +113,11 @@ export default function NavRail({ activeView, onNavigateHome, onOpenTask, active
       id="nav-rail"
     >
       {/* Marca */}
-      <button onClick={onNavigateHome} className="mb-5 flex h-10 w-full items-center rounded-lg px-2.5" title="ComexPilot">
+      <button
+        onClick={() => { setItemHomeAtivo('home'); onNavigateHome(); }}
+        className="mb-5 flex h-10 w-full items-center rounded-lg px-2.5"
+        title="ComexPilot"
+      >
         <Logo className="h-9 w-9 shrink-0" />
         <span
           className={`overflow-hidden whitespace-nowrap font-display font-semibold tracking-tight text-white transition-all duration-200 ${
@@ -131,7 +148,7 @@ export default function NavRail({ activeView, onNavigateHome, onOpenTask, active
                     key={item.id}
                     onClick={() => acionar(item)}
                     title={expanded ? undefined : `${item.label} — ${item.hint}`}
-                    className={`flex h-10 w-full items-center rounded-lg px-2.5 transition ${
+                    className={`flex h-10 w-full items-center rounded-lg px-2.5 transition-colors duration-150 ${
                       ativo ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                     }`}
                   >
@@ -151,7 +168,7 @@ export default function NavRail({ activeView, onNavigateHome, onOpenTask, active
       </div>
 
       <button
-        className={`flex items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 ${
+        className={`flex items-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-800 hover:text-slate-200 ${
           expanded ? 'w-full px-2.5 py-2' : 'justify-center py-2'
         }`}
         title={expanded ? undefined : 'Configurações'}
