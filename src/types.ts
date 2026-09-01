@@ -45,6 +45,7 @@ export type AppView = 'home' | 'workspace';
 
 export type TaskId =
   | 'audit'
+  | 'compliance'
   | 'risk'
   | 'checklist'
   | 'landedCost'

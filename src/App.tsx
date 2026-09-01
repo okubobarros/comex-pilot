@@ -388,6 +388,12 @@ export default function App() {
   const openTask = (taskId: TaskId) => {
     if (isBusy) return;
 
+    if (taskId === 'compliance') {
+      setWorkspaceMode('compliance');
+      setView('workspace');
+      return;
+    }
+
     if (taskId === 'landedCost') {
       setView('workspace');
       openLandedCost();
@@ -490,6 +496,14 @@ export default function App() {
     : chatIntent === 'classify' ? 'ncm'
     : 'audit';
 
+  // Item destacado na sidebar, derivado do estado do canvas.
+  const activeTask: TaskId | null =
+    view === 'home' ? null
+    : workspaceMode === 'landedCost' ? 'landedCost'
+    : workspaceMode === 'compliance' ? 'compliance'
+    : chatIntent === 'classify' ? 'classify'
+    : 'audit';
+
   // Abre um processo do Kanban carregando o agente responsável.
   const openProcess = (p: Processo) => onSelectAgent(p.agente);
 
@@ -499,7 +513,7 @@ export default function App() {
       <TopBar />
 
       <div className="flex min-h-0 flex-1">
-      <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} />
+      <NavRail activeView={view} onNavigateHome={navigateHome} onOpenTask={openTask} activeTask={activeTask} />
 
       {view === 'home' ? (
         <Home aiStatus={aiStatus} onOpenTask={openTask} onRunCommand={runHomeCommand} onOpenProcess={openProcess} />

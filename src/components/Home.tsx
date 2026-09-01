@@ -91,7 +91,7 @@ export default function Home({ aiStatus, onOpenTask, onRunCommand, onOpenProcess
         </div>
 
         {/* Pipeline (Kanban) */}
-        <div className="mt-8 flex items-end justify-between">
+        <div className="mt-8 flex items-end justify-between" id="pipeline-processos">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Pipeline</p>
             <h2 className="mt-1 font-display text-lg font-semibold text-slate-900">Processos ativos</h2>
