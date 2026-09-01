@@ -13,6 +13,14 @@ import type { AgentId } from '../components/os/AgentDock';
 export type ProcStatus = 'pendente' | 'em_analise' | 'concluido';
 export type Canal = 'verde' | 'amarelo' | 'vermelho';
 
+/** Resultado de uma consulta de conformidade, preservado entre navegações. */
+export interface ConformidadeSnapshot {
+  ncm: { codigo?: string; descricao?: string };
+  tratamentos: Record<string, unknown>[];
+  total_orgaos: number;
+  consultadoEm: string;
+}
+
 export interface Processo {
   id: string;
   nome: string;
@@ -36,6 +44,9 @@ interface ProcessContextValue {
   processos: Processo[];
   activeId: string | null;
   setActiveId: (id: string | null) => void;
+  /** Última consulta de conformidade — sobrevive à troca de agente no Dock. */
+  conformidade: ConformidadeSnapshot | null;
+  setConformidade: (s: ConformidadeSnapshot | null) => void;
 }
 
 const ProcessContext = createContext<ProcessContextValue | null>(null);
@@ -43,7 +54,11 @@ const ProcessContext = createContext<ProcessContextValue | null>(null);
 export function ProcessProvider({ children }: { children: React.ReactNode }) {
   const [processos] = useState<Processo[]>(DEMO);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const value = useMemo(() => ({ processos, activeId, setActiveId }), [processos, activeId]);
+  const [conformidade, setConformidade] = useState<ConformidadeSnapshot | null>(null);
+  const value = useMemo(
+    () => ({ processos, activeId, setActiveId, conformidade, setConformidade }),
+    [processos, activeId, conformidade]
+  );
   return <ProcessContext.Provider value={value}>{children}</ProcessContext.Provider>;
 }
 
