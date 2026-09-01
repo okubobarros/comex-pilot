@@ -15,6 +15,7 @@ import { costingHandler } from "./costingService.js";
 import { ptaxHandler } from "./ptaxService.js";
 import { normaHandler } from "./normaService.js";
 import { satGraphTestHandler, satGraphNcmHandler } from "./satGraphService.js";
+import { classifyHandler } from "./classifyService.js";
 import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./llm.js";
 
 dotenv.config();
@@ -31,6 +32,8 @@ app.get("/api/norma", normaHandler);
 // SAT-Graph (Neo4j): motor de conformidade aduaneira — TAs/LPCO por NCM.
 app.get("/api/sat-graph/test", satGraphTestHandler);
 app.get("/api/sat-graph/ncm/:code", satGraphNcmHandler);
+// Classificação fiscal pelo grafo (descrição → NCM + órgãos anuentes).
+app.post("/api/classify", classifyHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

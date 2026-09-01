@@ -173,8 +173,49 @@ export default function App() {
       .finally(() => setIsBusy(false));
   };
 
+  /**
+   * Classificação fiscal pelo SAT-Graph: busca nas descrições oficiais dos
+   * 15.156 NCMs e, quando há LLM disponível, escolha semântica entre os
+   * candidatos (Graph-RAG). Cai na heurística local só se o backend falhar.
+   */
   const classifyReply = (text: string, sourceLabel?: string) =>
-    runQuickReply(() => formatClassification(classifyProduct(text), sourceLabel));
+    runQuickReply(async () => {
+      try {
+        const resp = await fetch('/api/classify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const d = resp.ok ? await resp.json() : { success: false };
+
+        if (d.success && d.encontrado) {
+          const conf: Record<string, string> = { alta: '🟢 Alta', 'média': '🟡 Média', baixa: '🔴 Baixa' };
+          const orgaos: string[] = d.orgaos_anuentes ?? [];
+          const alts: { ncm: string; descricao: string }[] = d.alternativas ?? [];
+          const linhas = [
+            sourceLabel ?? '',
+            `**NCM sugerida:** \`${d.ncm}\``,
+            `**Descrição oficial:** ${d.descricao_oficial}`,
+            d.caminho ? `**Posição na NCM:** ${d.caminho}${d.descricao_oficial}` : '',
+            `**Órgãos anuentes:** ${orgaos.length ? orgaos.join(', ') : 'nenhum tratamento administrativo mapeado para este NCM'}`,
+            d.justificativa ? `**Justificativa:** ${d.justificativa}` : '',
+            `_Confiança: ${conf[d.confianca] ?? d.confianca} · ${d.metodo === 'graph_rag' ? 'Graph-RAG (grafo + IA)' : 'busca no grafo'} · termos ${d.termos_casados}_`,
+            alts.length ? `_Alternativas: ${alts.map((a) => `${a.ncm} (${a.descricao})`).join(' · ')}_` : '',
+          ];
+          return linhas.filter(Boolean).join('\n\n');
+        }
+
+        if (d.success && !d.encontrado) {
+          const termos: string[] = d.termos ?? [];
+          return [sourceLabel ?? '', d.mensagem, `_Termos buscados: ${termos.join(', ') || '—'}_`]
+            .filter(Boolean)
+            .join('\n\n');
+        }
+      } catch {
+        /* backend indisponível — segue para a heurística local */
+      }
+      return formatClassification(classifyProduct(text), sourceLabel);
+    });
 
   const riskReply = (text: string, sourceLabel?: string) => runQuickReply(() => {
     const analysis = buildHeuristicAnalysis(text, customRules);
