@@ -2,10 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Entry point serverless da Vercel: reaproveita o mesmo app Express do
- * `server.ts` (mesmas rotas /api/*). Em dev local, o server.ts continua
- * escutando a porta normalmente — aqui ele é só exportado como handler.
+ * Função serverless da Vercel. Carrega apenas o app de rotas (server/app.ts),
+ * sem Vite nem estáticos — o front é servido pelo CDN da Vercel.
  */
-import app from '../server';
+import app from '../server/app';
 
 export default app;
