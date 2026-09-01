@@ -1,16 +1,15 @@
-/** Diagnóstico: tenta carregar o app e REPORTA o erro real em vez de 500 opaco. */
+/** Diagnóstico 2: descobre a forma correta de importar arquivos do projeto. */
+import { readdirSync } from 'fs';
 export default async function handler(_req: any, res: any) {
-  const etapas: Record<string, string> = {};
-  const tenta = async (nome: string, fn: () => Promise<unknown>) => {
-    try { await fn(); etapas[nome] = 'ok'; }
-    catch (e: any) { etapas[nome] = 'ERRO: ' + (e?.message || String(e)).slice(0, 200); }
+  const r: Record<string, string> = {};
+  const t = async (n: string, fn: () => Promise<unknown>) => {
+    try { await fn(); r[n] = 'ok'; } catch (e: any) { r[n] = 'ERRO: ' + (e?.message || String(e)).slice(0, 120); }
   };
-  await tenta('express', () => import('express'));
-  await tenta('pg', () => import('pg'));
-  await tenta('neo4j-driver', () => import('neo4j-driver'));
-  await tenta('@google/genai', () => import('@google/genai'));
-  await tenta('cosmeticsDb', () => import('../src/data/cosmeticsDb'));
-  await tenta('server/llm', () => import('../server/llm'));
-  await tenta('server/app', () => import('../server/app'));
-  res.status(200).json({ etapas });
+  await t('sem extensao  ../server/llm', () => import('../server/llm'));
+  await t('com .js       ../server/llm.js', () => import('../server/llm.js'));
+  let arvore: any = {};
+  try { arvore['/var/task'] = readdirSync('/var/task').slice(0, 25); } catch (e: any) { arvore.erro = e.message; }
+  try { arvore['/var/task/server'] = readdirSync('/var/task/server').slice(0, 25); } catch (e: any) { arvore.server = 'inexistente'; }
+  try { arvore['/var/task/api'] = readdirSync('/var/task/api').slice(0, 25); } catch (e: any) { arvore.api = e.message; }
+  res.status(200).json({ imports: r, arvore });
 }
