@@ -191,6 +191,45 @@ export default function App() {
         if (d.success && d.encontrado) {
           const conf: Record<string, string> = { alta: '🟢 Alta', 'média': '🟡 Média', baixa: '🔴 Baixa' };
           const orgaos: string[] = d.orgaos_anuentes ?? [];
+
+          // Trilha auditável no Painel de Evidências: exigências e base legal
+          // de cada órgão, direto da travessia do grafo.
+          interface OrgaoDetalhe {
+            orgao: string;
+            orgao_nome?: string | null;
+            exige_lpco: boolean;
+            bases_legais: string[];
+            tratamentos: { ta_numero?: string | null; tipo_ta?: string | null }[];
+          }
+          const detalhe: OrgaoDetalhe[] = d.orgaosAnuentes ?? [];
+          if (detalhe.length > 0) {
+            const refs = new Map<string, string>();
+            detalhe.forEach((o) =>
+              o.bases_legais.forEach((b) => {
+                const m = b.match(/(RDC|Lei|Decreto|Portaria|Resolução|IN)[^,;/]*?[\d.]+[/\d]*/i);
+                if (m && !refs.has(m[0].trim())) refs.set(m[0].trim(), `${o.orgao} · ${b}`);
+              }),
+            );
+            setEvidence({
+              agent: 'ncm',
+              titulo: `Classificação · NCM ${d.ncm}`,
+              steps: [
+                `Busquei "${text}" nas descrições oficiais da NCM vigente e cheguei ao ${d.ncm} — ${d.descricao_oficial}.`,
+                d.caminho ? `Posição na nomenclatura: ${d.caminho}${d.descricao_oficial}.` : `Termos casados: ${d.termos_casados}.`,
+                `Travessia do grafo: ${detalhe.length} órgão(s) anuente(s) e ${d.total_tratamentos} tratamento(s) administrativo(s).`,
+                ...detalhe.slice(0, 5).map((o) => {
+                  const tas = o.tratamentos.map((t) => t.ta_numero).filter(Boolean).slice(0, 4).join(', ');
+                  return `${o.orgao}${o.orgao_nome ? ` (${o.orgao_nome})` : ''}: ${o.tratamentos.length} TA(s)${tas ? ` — ${tas}` : ''}${o.exige_lpco ? ' · EXIGE LPCO' : ''}${o.bases_legais[0] ? ` · ${o.bases_legais[0]}` : ''}.`;
+                }),
+                d.exige_lpco
+                  ? '⚠️ Há exigência de LPCO: o licenciamento precisa estar deferido antes do registro da DUIMP.'
+                  : 'Nenhum tratamento exige LPCO para este NCM neste snapshot.',
+                `Método: ${d.metodo === 'graph_rag' ? 'Graph-RAG (candidatos do grafo + escolha por IA)' : 'busca no grafo'}. Confirme a incidência no Simulador do Portal Único.`,
+              ],
+              citations: [...refs.entries()].map(([ref, nota]) => ({ ref, nota })),
+            });
+          }
+
           const alts: { ncm: string; descricao: string }[] = d.alternativas ?? [];
           const linhas = [
             sourceLabel ?? '',

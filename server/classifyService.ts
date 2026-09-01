@@ -14,7 +14,7 @@
 import type { Request, Response } from 'express';
 import { getDriver } from './neo4j.js';
 import { buscarNcmPorDescricao, termosDeBusca } from './ncmSearch.js';
-import { getTaPorNcm } from './satGraph.js';
+import { conformidadeCompleta } from './ncmCompliance.js';
 import { GEMINI_MODEL, callOpenRouter, extractJson } from './llm.js';
 import { GoogleGenAI } from '@google/genai';
 
@@ -28,6 +28,7 @@ import { GoogleGenAI } from '@google/genai';
 async function escolherComLlm(
   texto: string,
   candidatos: { ncm: string; descricao: string; caminho: string }[],
+  contextoLegal?: string,
 ): Promise<{ ncm: string; justificativa: string } | null> {
   const lista = candidatos
     .map((c, i) => `${i + 1}. NCM ${c.ncm} — ${c.caminho}${c.descricao}`)
@@ -39,7 +40,12 @@ async function escolherComLlm(
     `Candidatos extraídos da NCM oficial vigente:`,
     lista,
     ``,
+    ...(contextoLegal
+      ? ['', 'Exigências regulatórias mapeadas no grafo para o 1º candidato:', contextoLegal]
+      : []),
+    ``,
     `Escolha o MAIS adequado ao produto. Se nenhum servir, responda ncm "NENHUM".`,
+    `Na justificativa, cite a exigência ou o impedimento legal relevante quando houver.`,
     `Responda somente JSON: {"ncm":"0000.00.00","justificativa":"uma frase"}`,
   ].join('\n');
 
@@ -85,23 +91,40 @@ export async function classifyHandler(req: Request, res: Response): Promise<void
       return;
     }
 
-    // Graph-RAG: o LLM escolhe entre os candidatos do grafo (quando disponível).
+    // Travessia profunda do 1º candidato — serve de contexto regulatório ao LLM.
     let melhor = candidatos[0];
+    let orgaosAnuentes = await conformidadeCompleta(melhor.codigo_canonical);
+
+    const contextoLegal = orgaosAnuentes
+      .slice(0, 4)
+      .map((o) => {
+        const tipos = [...new Set(o.tratamentos.map((t) => t.tipo_ta).filter(Boolean))].join(', ');
+        const base = o.bases_legais[0] ?? 'base legal não informada';
+        return `- ${o.orgao}: ${o.tratamentos.length} TA(s)${tipos ? ` (${tipos})` : ''} · ${base}`;
+      })
+      .join('\n');
+
+    // Graph-RAG: o LLM escolhe entre os candidatos, já ciente das exigências.
     let escolhidoPorIa = false;
     let justificativaIa = '';
-    const escolha = await escolherComLlm(texto, candidatos);
+    const escolha = await escolherComLlm(texto, candidatos, contextoLegal || undefined);
     if (escolha && escolha.ncm !== 'NENHUM') {
       const alvo = escolha.ncm.replace(/\D/g, '');
       const achado = candidatos.find((c) => c.codigo_canonical === alvo || c.ncm === escolha.ncm);
-      if (achado) {
+      if (achado && achado.codigo_canonical !== melhor.codigo_canonical) {
+        // O LLM trocou de candidato: refaz a travessia para o NCM escolhido.
         melhor = achado;
+        orgaosAnuentes = await conformidadeCompleta(melhor.codigo_canonical);
+        escolhidoPorIa = true;
+        justificativaIa = escolha.justificativa;
+      } else if (achado) {
         escolhidoPorIa = true;
         justificativaIa = escolha.justificativa;
       }
     }
-    // Anuências do melhor candidato (pode ser vazio — nem todo NCM tem TA).
-    const tratamentos = await getTaPorNcm(melhor.codigo_canonical);
-    const orgaos = [...new Set(tratamentos.map((t) => t.orgao_npi).filter(Boolean))];
+    const orgaos = orgaosAnuentes.map((o) => o.orgao);
+    const totalTratamentos = orgaosAnuentes.reduce((n, o) => n + o.tratamentos.length, 0);
+    const exigeLpco = orgaosAnuentes.some((o) => o.exige_lpco);
 
     // Confiança derivada da cobertura dos termos — sem número inventado.
     const cobertura = melhor.hits / Math.max(melhor.termos_total, 1);
@@ -119,7 +142,9 @@ export async function classifyHandler(req: Request, res: Response): Promise<void
       justificativa: justificativaIa || undefined,
       termos_casados: `${melhor.hits}/${melhor.termos_total}`,
       orgaos_anuentes: orgaos,
-      total_tratamentos: tratamentos.length,
+      orgaosAnuentes,          // detalhe completo: TAs, exigências e base legal
+      exige_lpco: exigeLpco,
+      total_tratamentos: totalTratamentos,
       alternativas: candidatos.slice(1, 4).map((c) => ({ ncm: c.ncm, descricao: c.descricao })),
     });
   } catch (err) {
