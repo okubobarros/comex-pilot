@@ -126,25 +126,64 @@ geral: são preços restritos que puxariam a comparação para baixo indevidamen
 
 ## 5. Como rodar
 
+### ETL
+
 ```bash
-npm run etl:freight -- "C:\caminho\rate sheet 0901.xlsx" --year 2026
+npm run etl:freight -- "C:/caminho/rate sheet 0901.xlsx" --year 2026
 ```
 
 Gera dois artefatos com o mesmo conteúdo:
 
-- `src/data/freightRates.json` — base embarcada, servida por padrão
-- `seeds/0004_freight_rates.sql` — carga idempotente para o Postgres/Supabase
+- `src/data/freightRates.json` — base embarcada, servida por padrão pela API
+- `seeds/freight/*.sql` — carga idempotente para o Postgres/Supabase
 
 ```bash
-npm run test:freight      # motor de cálculo
+npm run test:freight      # motor de cálculo (24 asserções)
 ```
 
-Para usar o Postgres como fonte: aplicar `migrations/0003_freight.sql` e
-`seeds/0004_freight_rates.sql`, depois definir `FREIGHT_SOURCE=db` +
-`DATABASE_URL`. A view `mcat.v_freight_quotes` devolve o mesmo formato da base
-embarcada, então o motor de cálculo não muda.
+### Carregar no Postgres/Supabase
 
----
+**O SQL Editor do Supabase recusa scripts grandes** (*"Query is too large to be
+run via the SQL Editor"*). A carga tem ~5.600 linhas, então ela vem fatiada.
+
+Opção A — **um comando** (preferível; usa o `pg` que já é dependência do repo):
+
+```bash
+npm run load:freight
+```
+
+Precisa de `DATABASE_URL` no `.env` e da migration `0003_freight.sql` aplicada.
+Use `node scripts/load_freight.mjs --check` antes: ele valida a conexão e o
+schema **sem escrever nada**. Os dados vão por `unnest` de arrays — uma
+instrução parametrizada por tabela, sem risco de aspas mal escapadas.
+
+Opção B — **SQL Editor**, quando não há acesso de linha de comando. Rode em
+ordem, cada arquivo numa execução:
+
+| Ordem | Arquivo | Tamanho | O que faz |
+|---|---|---|---|
+| 1 | `0004_freight_a_stage.sql` | 4 KB | tabelas de staging + portos e armadores |
+| 2 | `0004_freight_b_data_01.sql` | 335 KB | dados (parte 1) |
+| 3 | `0004_freight_b_data_02.sql` | 209 KB | dados (parte 2) |
+| 4 | `0004_freight_c_load.sql` | 4 KB | carga definitiva + conferência |
+
+O tamanho das partes é ajustável: `--sql-chunk 200000` gera fatias menores.
+
+A parte C faz tudo em **conjuntos** — 6 `INSERT` cobrem as ~5.600 linhas — e
+**aborta com rollback se as contagens não baterem** com o que o ETL apurou:
+
+```sql
+if v_rotas <> 1273 then
+  raise exception 'rotas: gravadas %, esperadas 1273 (portos ou armadores faltando?)', v_rotas;
+end if;
+```
+
+Ou seja: uma carga parcial não passa despercebida. Ao final, a conferência
+`select count(*) from mcat.v_freight_quotes` deve devolver **2.966**.
+
+Para usar o Postgres como fonte da API em vez da base embarcada, defina
+`FREIGHT_SOURCE=db` + `DATABASE_URL`. A view `mcat.v_freight_quotes` devolve o
+mesmo formato, então o motor de cálculo não muda.
 
 ## 6. Premissas e limites — ler antes de usar em produção
 
@@ -170,11 +209,21 @@ Confirmar com o armador antes de tratar como compromisso contratual.
 - `Uruguay!L56`: HPL a USD 1.450 no 40'NOR — implausível para contêiner e com
   validade de abril.
 
-**O SQL não foi executado contra um Postgres vivo** nesta entrega (Docker
-indisponível no ambiente). Foi validado estaticamente: as contagens de `insert`
-batem exatamente com o JSON em todas as 7 tabelas, e o aspeamento está íntegro.
-A base embarcada, essa sim, está exercitada de ponta a ponta pela UI e pelos
-testes.
+**Nenhum dos dois caminhos de carga foi executado contra um Postgres vivo**
+nesta entrega (Docker indisponível no ambiente, e o `DATABASE_URL` do `.env`
+local é um placeholder). O que foi verificado:
+
+- **Sintaxe**: `migrations/0003_freight.sql` e as 4 partes do seed passam pelo
+  parser real do PostgreSQL (`libpg_query`, o mesmo que o servidor usa), e o
+  corpo PL/pgSQL do bloco `DO` passa pelo parser de PL/pgSQL.
+- **Contagens**: as tuplas geradas batem linha a linha com o JSON nas 7 tabelas.
+- **Rede de segurança**: a parte C aborta com rollback se as contagens gravadas
+  divergirem das esperadas, e o `load_freight.mjs` faz a mesma checagem dentro
+  da transação. Uma carga parcial não fica de pé.
+
+O que resta sem prova é a execução semântica (resolução de FKs, conversão de
+tipos). A base embarcada, essa sim, está exercitada de ponta a ponta pela UI e
+pelos testes.
 
 **Não há integração com API de armador.** A base é uma foto da planilha recebida;
 não se atualiza sozinha. Cada nova rate sheet exige rodar o ETL.

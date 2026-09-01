@@ -12,7 +12,8 @@
     "test:costing": "tsx scripts/test_costing.ts",
     "check:neo4j": "node scripts/check_neo4j.mjs",
     "test:freight": "tsx scripts/test_freight.ts",
-    "etl:freight": "python scripts/etl/parse_rate_sheet.py"
+    "etl:freight": "python scripts/etl/parse_rate_sheet.py",
+    "load:freight": "node scripts/load_freight.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -726,81 +726,244 @@ def sql_txt(v):
         return repr(v)
     return "'" + str(v).replace("'", "''") + "'"
 
+def _valores(linhas, campos, tabela, chunk=400):
+    """
+    Gera INSERTs multi-linha na tabela de staging.
 
-def gerar_sql(d) -> str:
-    L = ["-- GERADO POR scripts/etl/parse_rate_sheet.py — NÃO EDITAR À MÃO.",
-         f"-- Fonte: {d['rate_sheet']['source_file']} | importado em {d['rate_sheet']['imported_at']}",
-         "set search_path to mcat, public;", "begin;", ""]
+    Um INSERT por lote de `chunk` tuplas em vez de um por linha: é o que reduz o
+    arquivo de 2 MB para algo que o SQL Editor do Supabase aceita. O boilerplate
+    ("insert into ... (col, col, ...) values") passa a ser pago 1x a cada 400
+    linhas, não 1x por linha.
+    """
+    if not linhas:
+        return []
+    cols = ", ".join(campos)
+    saida = []
+    for i in range(0, len(linhas), chunk):
+        lote = linhas[i:i + chunk]
+        tuplas = ",\n".join(
+            "(" + ",".join(sql_txt(l.get(c)) for c in campos) + ")" for l in lote
+        )
+        saida.append(f"insert into mcat.{tabela} ({cols}) values\n{tuplas};")
+    return saida
 
-    L.append("-- Portos (UN/LOCODE)")
-    for p in d["ports"]:
-        L.append("insert into mcat.ports (unlocode, name, country) values "
-                 f"({sql_txt(p['unlocode'])}, {sql_txt(p['name'])}, {sql_txt(p['country'])}) "
-                 "on conflict (unlocode) do update set name = excluded.name;")
-    L.append("")
-    L.append("-- Armadores")
-    for c in d["carriers"]:
-        L.append(f"insert into mcat.carriers (code, name) values ({sql_txt(c['code'])}, "
-                 f"{sql_txt(c['name'])}) on conflict (code) do update set name = excluded.name;")
-    L.append("")
 
+# DDL das tabelas de staging. São tabelas REAIS (não temporárias) porque, no SQL
+# Editor, cada arquivo roda numa sessão própria — uma temp table não sobreviveria
+# entre as partes. O arquivo final as remove.
+DDL_STAGE = """\
+-- ============================================================================
+-- PARTE A — tabelas de staging
+-- Rode esta parte PRIMEIRO. Ela só cria estruturas de apoio; nenhuma tabela
+-- definitiva é tocada. Sem tipos nem constraints: staging deve ser tolerante,
+-- a validação acontece na parte C.
+-- ============================================================================
+set search_path to mcat, public;
+
+create table if not exists mcat._stage_route (
+  route_key int, carrier text, pol text, pod text, trade_lane text,
+  service_type text, service_name text, validity_start text, validity_end text,
+  validity_raw text, vessel_ref text, space_status text, sheet text,
+  source_row int, carrier_scope text, free_days_pol int, free_days_pod int,
+  free_time_raw text
+);
+create table if not exists mcat._stage_rate (
+  route_key int, equipment_type text, also_valid_for text, base_rate numeric,
+  currency text, unit text, adjusted_rate numeric, weight_operator text,
+  weight_limit_ton numeric, weight_basis text, cargo_type text,
+  rate_source text, raw_cell text
+);
+create table if not exists mcat._stage_surcharge (
+  route_key int, fee_code text, fee_label text, amount numeric, currency text,
+  charge_basis text, equipment_type text, min_weight_ton numeric,
+  condition_raw text, source_column text
+);
+create table if not exists mcat._stage_issue (
+  sheet text, source_row int, severity text, kind text, detail text
+);
+create table if not exists mcat._stage_map (route_key int, route_id uuid);
+
+truncate mcat._stage_route, mcat._stage_rate, mcat._stage_surcharge,
+         mcat._stage_issue, mcat._stage_map;
+"""
+
+
+def _ddl_load(rs, esperado_rotas, esperado_tarifas):
+    """PARTE C: transfere do staging para as tabelas definitivas, em conjuntos."""
+    return f"""\
+-- ============================================================================
+-- PARTE C — carga definitiva (rode por ÚLTIMO)
+-- Tudo em conjuntos: 6 INSERTs cobrem as ~5.600 linhas. Transação única —
+-- qualquer falha desfaz a carga inteira.
+-- ============================================================================
+set search_path to mcat, public;
+begin;
+
+do $$
+declare
+  v_sheet uuid;
+  v_rotas int;
+  v_tarifas int;
+begin
+  insert into mcat.rate_sheets (source_file, issued_on, currency, assumed_year)
+  values ({sql_txt(rs['source_file'])}, {sql_txt(rs['issued_on'])}::date,
+          {sql_txt(rs['currency'])}, {rs['assumed_year']})
+  on conflict (source_file, issued_on) do update set imported_at = now()
+  returning id into v_sheet;
+
+  -- Reimportação substitui apenas as linhas DESTA rate sheet (cascade nas filhas).
+  delete from mcat.freight_routes where rate_sheet_id = v_sheet;
+  delete from mcat.rate_issues    where rate_sheet_id = v_sheet;
+
+  insert into mcat.freight_routes (rate_sheet_id, carrier_id, pol_id, pod_id, trade_lane,
+    service_type, service_name, validity_start, validity_end, validity_raw, vessel_ref,
+    space_status, source_sheet, source_row, carrier_scope)
+  select v_sheet, c.id, o.id, dst.id, t.trade_lane, t.service_type, t.service_name,
+         nullif(t.validity_start,'')::date, nullif(t.validity_end,'')::date,
+         t.validity_raw, t.vessel_ref, t.space_status, t.sheet, t.source_row, t.carrier_scope
+    from mcat._stage_route t
+    join mcat.carriers c on c.code     = t.carrier
+    join mcat.ports    o on o.unlocode = t.pol
+    join mcat.ports  dst on dst.unlocode = t.pod;
+
+  get diagnostics v_rotas = row_count;
+
+  -- Liga o id do ETL ao uuid gravado pela chave natural (aba, linha, POL, POD),
+  -- única por construção do ETL — é o que dispensa um INSERT por rota.
+  insert into mcat._stage_map (route_key, route_id)
+  select t.route_key, r.id
+    from mcat.freight_routes r
+    join mcat.ports    o on o.id   = r.pol_id
+    join mcat.ports  dst on dst.id = r.pod_id
+    join mcat._stage_route t
+      on t.sheet = r.source_sheet and t.source_row = r.source_row
+     and t.pol = o.unlocode and t.pod = dst.unlocode
+   where r.rate_sheet_id = v_sheet;
+
+  insert into mcat.equipment_rates (route_id, equipment_type, also_valid_for, base_rate,
+    currency, unit, adjusted_rate, weight_operator, weight_limit_ton, weight_basis,
+    cargo_type, rate_source, raw_cell)
+  select m.route_id, s.equipment_type, s.also_valid_for, s.base_rate, s.currency, s.unit,
+         s.adjusted_rate, s.weight_operator, s.weight_limit_ton, s.weight_basis,
+         s.cargo_type, s.rate_source, s.raw_cell
+    from mcat._stage_rate s join mcat._stage_map m on m.route_key = s.route_key;
+
+  get diagnostics v_tarifas = row_count;
+
+  insert into mcat.rate_surcharges (route_id, fee_code, fee_label, amount, currency,
+    charge_basis, equipment_type, min_weight_ton, condition_raw, source_column)
+  select m.route_id, s.fee_code, s.fee_label, s.amount, s.currency, s.charge_basis,
+         s.equipment_type, s.min_weight_ton, s.condition_raw, s.source_column
+    from mcat._stage_surcharge s join mcat._stage_map m on m.route_key = s.route_key;
+
+  insert into mcat.free_time_rules (route_id, free_days_pol, free_days_pod, raw)
+  select m.route_id, t.free_days_pol, t.free_days_pod, t.free_time_raw
+    from mcat._stage_route t join mcat._stage_map m on m.route_key = t.route_key
+   where t.free_days_pol is not null;
+
+  insert into mcat.rate_issues (rate_sheet_id, source_sheet, source_row, severity, kind, detail)
+  select v_sheet, sheet, source_row, severity, kind, detail from mcat._stage_issue;
+
+  -- A carga só vale se bater com o que o ETL apurou.
+  if v_rotas <> {esperado_rotas} then
+    raise exception 'rotas: gravadas %, esperadas {esperado_rotas} (portos ou armadores faltando?)', v_rotas;
+  end if;
+  if v_tarifas <> {esperado_tarifas} then
+    raise exception 'tarifas: gravadas %, esperadas {esperado_tarifas}', v_tarifas;
+  end if;
+end $$;
+
+drop table if exists mcat._stage_route, mcat._stage_rate, mcat._stage_surcharge,
+                     mcat._stage_issue, mcat._stage_map;
+
+commit;
+
+-- Confirmação: deve devolver {esperado_tarifas}.
+select count(*) as cotacoes from mcat.v_freight_quotes;
+"""
+
+
+def gerar_partes(d, limite_bytes=350_000):
+    """
+    Emite a carga em partes que cabem no SQL Editor do Supabase.
+
+    Devolve [(nome_do_arquivo, conteudo)]. As dimensões (portos, armadores) vão
+    junto com o staging: são poucas linhas e precisam existir antes da parte C.
+    """
     rs = d["rate_sheet"]
-    L += ["-- Rate sheet (idempotente por source_file + issued_on)",
-          "insert into mcat.rate_sheets (source_file, issued_on, currency, assumed_year) values "
-          f"({sql_txt(rs['source_file'])}, {sql_txt(rs['issued_on'])}, {sql_txt(rs['currency'])}, "
-          f"{rs['assumed_year']}) on conflict (source_file, issued_on) do update "
-          "set imported_at = now() returning id;", ""]
+    cab = (f"-- GERADO POR scripts/etl/parse_rate_sheet.py — NÃO EDITAR À MÃO.\n"
+           f"-- Fonte: {rs['source_file']} | importado em {rs['imported_at']}\n")
 
-    L += ["do $$", "declare", "  v_sheet uuid;", "  v_route uuid;", "begin",
-          f"  select id into v_sheet from mcat.rate_sheets where source_file = {sql_txt(rs['source_file'])} "
-          f"and issued_on is not distinct from {sql_txt(rs['issued_on'])};",
-          "  delete from mcat.freight_routes where rate_sheet_id = v_sheet;",
-          "  delete from mcat.rate_issues where rate_sheet_id = v_sheet;", ""]
+    rotas = [{
+        "route_key": r["id"], "carrier": r["carrier"], "pol": r["pol"], "pod": r["pod"],
+        "trade_lane": r["trade_lane"], "service_type": r["service_type"],
+        "service_name": r["service_name"], "validity_start": r["validity_start"],
+        "validity_end": r["validity_end"], "validity_raw": r["validity_raw"],
+        "vessel_ref": r["vessel_ref"], "space_status": r["space_status"],
+        "sheet": r["sheet"], "source_row": r["source_row"],
+        "carrier_scope": ",".join(r["carrier_scope"]) or None,
+        "free_days_pol": r["free_days_pol"], "free_days_pod": r["free_days_pod"],
+        "free_time_raw": r["free_time_raw"],
+    } for r in d["routes"]]
 
-    quotes_por_rota = {}
-    for q in d["quotes"]:
-        quotes_por_rota.setdefault(q["route_id"], []).append(q)
+    tarifas = [{
+        "route_key": q["route_id"], "equipment_type": q["equipment_type"],
+        "also_valid_for": ",".join(q["also_valid_for"]) or None,
+        "base_rate": q["base_rate"], "currency": q["currency"], "unit": q["unit"],
+        "adjusted_rate": q["adjusted_rate"], "weight_operator": q["weight_operator"],
+        "weight_limit_ton": q["weight_limit_ton"], "weight_basis": q["weight_basis"],
+        "cargo_type": q["cargo_type"], "rate_source": q["rate_source"],
+        "raw_cell": q["raw_cell"],
+    } for q in d["quotes"]]
 
-    for r in d["routes"]:
-        L.append(
-            "  insert into mcat.freight_routes (rate_sheet_id, carrier_id, pol_id, pod_id, trade_lane,"
-            " service_type, service_name, validity_start, validity_end, validity_raw, vessel_ref,"
-            " space_status, source_sheet, source_row, carrier_scope) select v_sheet, c.id, o.id, dst.id,"
-            f" {sql_txt(r['trade_lane'])}, {sql_txt(r['service_type'])}, {sql_txt(r['service_name'])},"
-            f" {sql_txt(r['validity_start'])}::date, {sql_txt(r['validity_end'])}::date,"
-            f" {sql_txt(r['validity_raw'])}, {sql_txt(r['vessel_ref'])}, {sql_txt(r['space_status'])},"
-            f" {sql_txt(r['sheet'])}, {r['source_row']}, {sql_txt(','.join(r['carrier_scope']) or None)}"
-            f" from mcat.carriers c, mcat.ports o, mcat.ports dst"
-            f" where c.code = {sql_txt(r['carrier'])} and o.unlocode = {sql_txt(r['pol'])}"
-            f" and dst.unlocode = {sql_txt(r['pod'])} returning id into v_route;")
-        if r["free_days_pol"] is not None:
-            L.append("  insert into mcat.free_time_rules (route_id, free_days_pol, free_days_pod, raw)"
-                     f" values (v_route, {r['free_days_pol']}, {sql_txt(r['free_days_pod'])},"
-                     f" {sql_txt(r['free_time_raw'])});")
-        for q in quotes_por_rota.get(r["id"], []):
-            L.append("  insert into mcat.equipment_rates (route_id, equipment_type, also_valid_for,"
-                     " base_rate, currency, unit, adjusted_rate, weight_operator, weight_limit_ton,"
-                     " weight_basis, cargo_type, rate_source, raw_cell) values (v_route,"
-                     f" {sql_txt(q['equipment_type'])},"
-                     f" {sql_txt(','.join(q['also_valid_for']) or None)}, {q['base_rate']},"
-                     f" {sql_txt(q['currency'])}, {sql_txt(q['unit'])}, {sql_txt(q['adjusted_rate'])},"
-                     f" {sql_txt(q['weight_operator'])}, {sql_txt(q['weight_limit_ton'])},"
-                     f" {sql_txt(q['weight_basis'])}, {sql_txt(q['cargo_type'])},"
-                     f" {sql_txt(q['rate_source'])}, {sql_txt(q['raw_cell'])});")
-        for s in r["surcharges"]:
-            L.append("  insert into mcat.rate_surcharges (route_id, fee_code, fee_label, amount,"
-                     " currency, charge_basis, equipment_type, min_weight_ton, condition_raw,"
-                     f" source_column) values (v_route, {sql_txt(s['fee_code'])},"
-                     f" {sql_txt(s['fee_label'])}, {s['amount']}, {sql_txt(s['currency'])},"
-                     f" {sql_txt(s['charge_basis'])}, {sql_txt(s['equipment_type'])},"
-                     f" {sql_txt(s['min_weight_ton'])}, {sql_txt(s['condition_raw'])},"
-                     f" {sql_txt(s['source_column'])});")
-    for i in d["issues"]:
-        L.append("  insert into mcat.rate_issues (rate_sheet_id, source_sheet, source_row, severity,"
-                 f" kind, detail) values (v_sheet, {sql_txt(i['sheet'])}, {i['source_row']},"
-                 f" {sql_txt(i['severity'])}, {sql_txt(i['kind'])}, {sql_txt(i['detail'])});")
-    L += ["end $$;", "", "commit;"]
-    return "\n".join(L) + "\n"
+    taxas = [dict(s, route_key=r["id"]) for r in d["routes"] for s in r["surcharges"]]
+
+    # --- Parte A: staging + dimensões ---
+    a = [cab, DDL_STAGE, "", "-- Dimensões (idempotentes)"]
+    for lote in _valores(d["ports"], ["unlocode", "name", "country"], "ports"):
+        a.append(lote.rstrip(";") + "\non conflict (unlocode) do update set name = excluded.name;")
+    for lote in _valores(d["carriers"], ["code", "name"], "carriers"):
+        a.append(lote.rstrip(";") + "\non conflict (code) do update set name = excluded.name;")
+    partes = [("0004_freight_a_stage.sql", "\n".join(a) + "\n")]
+
+    # --- Parte B: dados, fatiados por tamanho ---
+    comandos = (
+        _valores(rotas, ["route_key", "carrier", "pol", "pod", "trade_lane", "service_type",
+                         "service_name", "validity_start", "validity_end", "validity_raw",
+                         "vessel_ref", "space_status", "sheet", "source_row", "carrier_scope",
+                         "free_days_pol", "free_days_pod", "free_time_raw"], "_stage_route")
+        + _valores(tarifas, ["route_key", "equipment_type", "also_valid_for", "base_rate",
+                             "currency", "unit", "adjusted_rate", "weight_operator",
+                             "weight_limit_ton", "weight_basis", "cargo_type", "rate_source",
+                             "raw_cell"], "_stage_rate")
+        + _valores(taxas, ["route_key", "fee_code", "fee_label", "amount", "currency",
+                           "charge_basis", "equipment_type", "min_weight_ton", "condition_raw",
+                           "source_column"], "_stage_surcharge")
+        + _valores(d["issues"], ["sheet", "source_row", "severity", "kind", "detail"],
+                   "_stage_issue")
+    )
+
+    blocos, atual, tam = [], [], 0
+    for c in comandos:
+        # Nunca parte um INSERT ao meio: o corte só acontece entre comandos.
+        if atual and tam + len(c) > limite_bytes:
+            blocos.append(atual)
+            atual, tam = [], 0
+        atual.append(c)
+        tam += len(c) + 1
+    if atual:
+        blocos.append(atual)
+
+    for i, bloco in enumerate(blocos, 1):
+        nome = f"0004_freight_b_data_{i:02d}.sql"
+        topo = (f"{cab}-- PARTE B{i} de {len(blocos)} — dados para o staging.\n"
+                f"-- Rode as partes B em ordem, depois a parte C.\n"
+                "set search_path to mcat, public;\n")
+        partes.append((nome, topo + "\n" + "\n".join(bloco) + "\n"))
+
+    partes.append(("0004_freight_c_load.sql",
+                   cab + _ddl_load(rs, len(rotas), len(tarifas))))
+    return partes
 
 
 def main():
@@ -809,7 +972,10 @@ def main():
     ap.add_argument("--year", type=int, default=dt.date.today().year,
                     help="ano das validades (a planilha não traz ano)")
     ap.add_argument("--json-out", default=os.path.join(RAIZ, "src", "data", "freightRates.json"))
-    ap.add_argument("--sql-out", default=os.path.join(RAIZ, "seeds", "0004_freight_rates.sql"))
+    ap.add_argument("--sql-dir", default=os.path.join(RAIZ, "seeds", "freight"),
+                    help="pasta das partes SQL (o SQL Editor do Supabase tem limite de tamanho)")
+    ap.add_argument("--sql-chunk", type=int, default=350_000,
+                    help="tamanho maximo de cada parte de dados, em bytes")
     a = ap.parse_args()
 
     caminho = a.arquivo
@@ -824,9 +990,14 @@ def main():
     os.makedirs(os.path.dirname(a.json_out), exist_ok=True)
     with open(a.json_out, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
-    os.makedirs(os.path.dirname(a.sql_out), exist_ok=True)
-    with open(a.sql_out, "w", encoding="utf-8") as f:
-        f.write(gerar_sql(d))
+    os.makedirs(a.sql_dir, exist_ok=True)
+    for antigo in os.listdir(a.sql_dir):
+        if antigo.startswith("0004_freight_") and antigo.endswith(".sql"):
+            os.remove(os.path.join(a.sql_dir, antigo))
+    partes = gerar_partes(d, a.sql_chunk)
+    for nome, conteudo in partes:
+        with open(os.path.join(a.sql_dir, nome), "w", encoding="utf-8") as f:
+            f.write(conteudo)
 
     sev = {}
     for i in d["issues"]:
@@ -839,7 +1010,9 @@ def main():
     print(f"cotacoes   : {len(d['quotes'])}")
     print(f"issues     : {len(d['issues'])} {sev}")
     print(f"json -> {a.json_out}")
-    print(f"sql  -> {a.sql_out}")
+    print(f"sql  -> {a.sql_dir} ({len(partes)} partes)")
+    for nome, conteudo in partes:
+        print(f"        {nome:<32} {len(conteudo)/1024:7.0f} KB")
 
 
 if __name__ == "__main__":
