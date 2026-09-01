@@ -136,6 +136,7 @@ export async function classifyHandler(req: Request, res: Response): Promise<void
       ncm: melhor.ncm,
       codigo_canonical: melhor.codigo_canonical,
       descricao_oficial: melhor.descricao,
+      descricao_completa: melhor.descricao_completa,
       caminho: melhor.caminho,
       confianca: escolhidoPorIa ? (confianca === 'baixa' ? 'média' : confianca) : confianca,
       metodo: escolhidoPorIa ? 'graph_rag' : 'busca_lexical',
@@ -145,7 +146,9 @@ export async function classifyHandler(req: Request, res: Response): Promise<void
       orgaosAnuentes,          // detalhe completo: TAs, exigências e base legal
       exige_lpco: exigeLpco,
       total_tratamentos: totalTratamentos,
-      alternativas: candidatos.slice(1, 4).map((c) => ({ ncm: c.ncm, descricao: c.descricao })),
+      alternativas: candidatos.slice(1, 4).map((c) => ({
+        ncm: c.ncm, descricao: c.descricao, descricao_completa: c.descricao_completa,
+      })),
     });
   } catch (err) {
     console.error('classifyHandler', err);

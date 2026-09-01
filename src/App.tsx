@@ -217,7 +217,7 @@ export default function App() {
               titulo: `Classificação · NCM ${d.ncm}`,
               steps: [
                 `Busquei "${text}" nas descrições oficiais da NCM vigente e cheguei ao ${d.ncm} — ${d.descricao_oficial}.`,
-                d.caminho ? `Posição na nomenclatura: ${d.caminho}${d.descricao_oficial}.` : `Termos casados: ${d.termos_casados}.`,
+                d.descricao_completa ? `Posição na nomenclatura: ${d.descricao_completa}.` : `Termos casados: ${d.termos_casados}.`,
                 `Travessia do grafo: ${detalhe.length} órgão(s) anuente(s) e ${d.total_tratamentos} tratamento(s) administrativo(s).`,
                 ...detalhe.slice(0, 5).map((o) => {
                   const tas = o.tratamentos.map((t) => t.ta_numero).filter(Boolean).slice(0, 4).join(', ');
@@ -236,8 +236,8 @@ export default function App() {
           const linhas = [
             sourceLabel ?? '',
             `**NCM sugerida:** \`${d.ncm}\``,
-            `**Descrição oficial:** ${d.descricao_oficial}`,
-            d.caminho ? `**Posição na NCM:** ${d.caminho}${d.descricao_oficial}` : '',
+            `**Descrição oficial:** ${d.descricao_completa || d.descricao_oficial}`,
+            '',
             `**Órgãos anuentes:** ${orgaos.length ? orgaos.join(', ') : 'nenhum tratamento administrativo mapeado para este NCM'}`,
             d.justificativa ? `**Justificativa:** ${d.justificativa}` : '',
             `_Confiança: ${conf[d.confianca] ?? d.confianca} · ${d.metodo === 'graph_rag' ? 'Graph-RAG (grafo + IA)' : 'busca no grafo'} · termos ${d.termos_casados}_`,

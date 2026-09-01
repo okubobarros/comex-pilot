@@ -12,6 +12,10 @@
  */
 import { query } from './neo4j.js';
 
+/** Lista de descrições de ancestrais, já saneada. */
+const cadeia = (v: unknown): string[] =>
+  ((v as unknown[]) ?? []).map((c) => String(c ?? '').trim()).filter(Boolean);
+
 const STOPWORDS = new Set([
   'de', 'da', 'do', 'das', 'dos', 'para', 'com', 'em', 'no', 'na', 'nos', 'nas',
   'um', 'uma', 'uns', 'umas', 'o', 'a', 'os', 'as', 'e', 'ou', 'the', 'of', 'for',
@@ -39,6 +43,8 @@ export interface CandidatoNcm {
   ncm: string;
   codigo_canonical: string;
   descricao: string;
+  /** Capítulo -> posição -> ... -> item, numa linha só. */
+  descricao_completa: string;
   caminho: string;
   hits: number;
   termos_total: number;
@@ -74,11 +80,14 @@ export async function buscarNcmPorDescricao(texto: string, limite = 6): Promise<
     OPTIONAL MATCH (a:NCMOccurrence)
       WHERE a.code_canonical <> o.code_canonical
         AND o.code_canonical STARTS WITH a.code_canonical
+    // ORDER BY antes do collect: sem isto os ancestrais voltam em ordem
+    // arbitrária e o "caminho" sai embaralhado (capítulo depois da subposição).
+    WITH o, hits, score, a ORDER BY size(a.code_canonical)
     WITH o, hits, score, collect(a.description_plain) AS ctx
     RETURN o.code_display     AS ncm,
            o.code_canonical   AS codigo_canonical,
            o.description_plain AS descricao,
-           reduce(s = '', c IN ctx | s + c + ' › ') AS caminho,
+           ctx                AS ancestrais,
            hits, score
     ORDER BY hits DESC, score DESC, o.code_canonical
     LIMIT ${lim}`;
@@ -92,7 +101,11 @@ export async function buscarNcmPorDescricao(texto: string, limite = 6): Promise<
         ncm: String(r.ncm ?? ''),
         codigo_canonical: String(r.codigo_canonical ?? ''),
         descricao: String(r.descricao ?? ''),
-        caminho: String(r.caminho ?? ''),
+        caminho: cadeia(r.ancestrais).map((c) => `${c} › `).join(''),
+        // A folha isolada costuma ser "Outros": o que identifica a mercadoria é
+        // a cadeia inteira. Mesma regra da tela de conformidade.
+        descricao_completa: [...cadeia(r.ancestrais), String(r.descricao ?? '')]
+          .map((c) => c.replace(/^[-\s]+/, '').trim()).filter(Boolean).join(' - '),
         hits: Number(r.hits ?? 0),
         termos_total: termos.length,
       }));

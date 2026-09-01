@@ -41,12 +41,27 @@ export interface Tratamento {
   rule_id?: string | null;
 }
 
+interface NivelNcm {
+  codigo: string;
+  nivel: string;
+  descricao: string;
+}
+
 interface NcmInfo {
   codigo?: string;
   descricao?: string;
   nivel?: string;
   folha?: boolean;
+  /** Cadeia capítulo -> posição -> ... -> item, do grafo. */
+  hierarquia?: NivelNcm[];
+  /** A cadeia junta numa linha: é a descrição que identifica a mercadoria. */
+  descricao_completa?: string;
 }
+
+const NIVEL_LABEL: Record<string, string> = {
+  CHAPTER: 'Capítulo', POSITION: 'Posição', SUBPOSITION: 'Subposição',
+  INTERMEDIATE: 'Desdobramento', ITEM: 'Item',
+};
 
 interface Resultado {
   ncm: NcmInfo;
@@ -112,6 +127,7 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
   const [salvo, setSalvo] = useState(false);
 
   const { setEvidence } = useEvidence();
+  const [verHierarquia, setVerHierarquia] = useState(false);
   const { conformidade, setConformidade } = useProcessos();
 
   // A consulta vive no ProcessContext: trocar de agente no Dock não a descarta (P5).
@@ -132,6 +148,9 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
 
     const steps = [
       `Resolvi o NCM ${codigo} no grafo normativo (SAT-Graph) e localizei ${r.tratamentos.length} regra(s) de tratamento administrativo.`,
+      ...(val(r.ncm.descricao_completa)
+        ? [`Descrição hierárquica (${r.ncm.hierarquia?.length ?? 0} níveis): ${val(r.ncm.descricao_completa)}`]
+        : []),
       `Cruzei as regras com ${r.total_orgaos} órgão(s) anuente(s): ${[...porOrgao.keys()].join(', ')}.`,
       ...[...porOrgao.entries()].map(([orgao, ts]) => {
         const vig = val(ts[0]?.vigencia);
@@ -212,7 +231,10 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
     const codigo = val(data?.ncm.codigo) ?? ncm;
     setLiPrefill({
       ncm: codigo,
-      description: val(data?.ncm.descricao) ?? val(t.tipo_ta) ?? 'Mercadoria importada',
+      // A minuta precisa da descrição que IDENTIFICA a mercadoria, não do
+      // "Outros" da folha — é ela que a autoridade lê no LPCO.
+      description: val(data?.ncm.descricao_completa) ?? val(data?.ncm.descricao)
+        ?? val(t.tipo_ta) ?? 'Mercadoria importada',
       quantity: 1,
       unitPrice: 0,
       totalPrice: 0,
@@ -309,9 +331,22 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
             {/* Resumo + ações de saída (P4) */}
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <span className="font-mono text-sm font-semibold text-slate-900">{val(data.ncm.codigo) ?? ncm}</span>
-                  <p className="text-xs text-slate-500">{val(data.ncm.descricao) ?? '—'}</p>
+                <div className="min-w-[260px] flex-1">
+                  <span className="block font-mono text-sm font-semibold text-slate-900">{val(data.ncm.codigo) ?? ncm}</span>
+                  {/* A descrição da folha isolada não identifica nada: 2933.39.99 é
+                      literalmente "Outros". O que identifica é a cadeia inteira. */}
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    {val(data.ncm.descricao_completa) ?? val(data.ncm.descricao) ?? '—'}
+                  </p>
+                  {(data.ncm.hierarquia?.length ?? 0) > 1 && (
+                    <button
+                      onClick={() => setVerHierarquia((v) => !v)}
+                      className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 transition-colors duration-150 hover:text-teal-900"
+                    >
+                      <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${verHierarquia ? 'rotate-180' : ''}`} />
+                      {verHierarquia ? 'ocultar' : 'ver'} os {data.ncm.hierarquia!.length} níveis da NCM
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {totalBloqueios > 0 && (
@@ -324,6 +359,20 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                   </span>
                 </div>
               </div>
+
+              {verHierarquia && data.ncm.hierarquia && (
+                <ol className="mt-3 border-t border-slate-100 pt-3">
+                  {data.ncm.hierarquia.map((n, i) => (
+                    <li key={n.codigo} className="flex gap-2 py-1 text-xs" style={{ paddingLeft: i * 12 }}>
+                      <span className="w-24 shrink-0 font-mono text-[11px] text-slate-400">{n.codigo}</span>
+                      <span className="w-24 shrink-0 text-[10px] uppercase tracking-wider text-slate-300">
+                        {NIVEL_LABEL[n.nivel] ?? n.nivel}
+                      </span>
+                      <span className="min-w-0 text-slate-600">{n.descricao.replace(/^[-\s]+/, '')}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 <button

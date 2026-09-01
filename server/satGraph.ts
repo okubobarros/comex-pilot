@@ -73,6 +73,56 @@ export async function getTaPorNcm(code: string) {
 }
 
 /** Código, descrição e nível de um NCM (descrição vem de NCMOccurrence). */
+/** Um degrau da árvore NCM: capítulo, posição, subposição, item... */
+export interface NivelNcm {
+  codigo: string;
+  nivel: string;
+  descricao: string;
+}
+
+/**
+ * Descrição HIERÁRQUICA do NCM.
+ *
+ * A descrição de um item folha isolada é inútil para quem opera: 2933.39.99 é
+ * literalmente "Outros". O sentido está na cadeia — capítulo, posição,
+ * subposição — e é ela que sustenta a classificação perante a fiscalização.
+ *
+ * `code_canonical` é só dígitos no grafo (29, 2933, 29333, 293339, ...), então
+ * todo ancestral é um PREFIXO do código do item. Uma comparação por prefixo
+ * devolve a cadeia inteira sem precisar percorrer relações.
+ */
+export async function getNcmHierarquia(code: string): Promise<NivelNcm[]> {
+  const canon = String(code).replace(/\D/g, '');
+  if (!canon) return [];
+  const rows = await query(
+    `MATCH (o:NCMOccurrence)
+      WHERE size(o.code_canonical) <= size($canon) AND $canon STARTS WITH o.code_canonical
+      RETURN coalesce(o.code_display, o.code_canonical) AS codigo,
+             o.level_code        AS nivel,
+             o.description_plain AS descricao
+      ORDER BY size(o.code_canonical)`,
+    { canon },
+  );
+  return rows
+    .map((r) => ({
+      codigo: String(r.codigo ?? ''),
+      nivel: String(r.nivel ?? ''),
+      descricao: String(r.descricao ?? '').trim(),
+    }))
+    .filter((r) => r.descricao);
+}
+
+/**
+ * Junta a cadeia numa linha única.
+ *
+ * Remove só os travessões de indentação que a TIPI usa para marcar
+ * profundidade ("-- Outros"); o resto do texto oficial fica intacto, inclusive
+ * a pontuação final, porque é a redação que vale numa contestação.
+ */
+export function descricaoCompleta(niveis: NivelNcm[]): string {
+  return niveis.map((n) => n.descricao.replace(/^[-\s]+/, '').trim()).filter(Boolean).join(' - ');
+}
+
 export async function getNcmInfo(code: string) {
   const cypher = `
     MATCH (n:NCMCode {id: $id})
@@ -83,8 +133,20 @@ export async function getNcmInfo(code: string) {
            o.level_code                               AS nivel,
            o.is_leaf                                  AS folha
     LIMIT 1`;
-  const rows = await query(cypher, { id: ncmId(code) });
-  return rows[0] ?? null;
+  const [rows, hierarquia] = await Promise.all([
+    query(cypher, { id: ncmId(code) }),
+    getNcmHierarquia(code),
+  ]);
+  const base = rows[0];
+  if (!base && hierarquia.length === 0) return null;
+  // A hierarquia sozinha já identifica o NCM mesmo quando não há nó NCMCode.
+  const folha = hierarquia[hierarquia.length - 1];
+  return {
+    ...(base ?? { id: null, codigo: folha?.codigo ?? code, descricao: folha?.descricao ?? null,
+                  nivel: folha?.nivel ?? null, folha: true }),
+    hierarquia,
+    descricao_completa: descricaoCompleta(hierarquia) || null,
+  };
 }
 
 /** Snapshot do banco por label (debug/health). */
