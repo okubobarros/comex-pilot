@@ -13,7 +13,7 @@
 import React, { useState } from 'react';
 import {
   Calculator, FileSearch, Home as HomeIcon, KanbanSquare,
-  Scale, Settings, ShieldAlert,
+  Scale, Settings, ShieldAlert, Ship,
 } from 'lucide-react';
 import Logo from './Logo';
 import type { AppView, TaskId } from '../types';
@@ -54,6 +54,7 @@ const SECOES: RailSection[] = [
   {
     titulo: 'Financeiro',
     itens: [
+      { id: 'freight', label: 'Cotação de Frete', hint: 'Rate sheets', icon: <Ship className="h-4 w-4" /> },
       { id: 'landedCost', label: 'Custo de Importação', hint: 'Landed Cost', icon: <Calculator className="h-4 w-4" /> },
     ],
   },

@@ -23,6 +23,7 @@ import Logo from './Logo';
 import LandedCostDrawer from './LandedCostDrawer';
 import AuditWorkspace from './audit/AuditWorkspace';
 import ComplianceWorkspace from './compliance/ComplianceWorkspace';
+import FreightWorkspace from './freight/FreightWorkspace';
 import { AuditAlert, InvoiceAnalysis, InvoiceItem, WorkspaceMode, WorkspaceStatus } from '../types';
 
 interface WorkspaceProps {
@@ -34,6 +35,8 @@ interface WorkspaceProps {
   onAlertInquire: (alert: AuditAlert) => void;
   onOpenLandedCost: () => void;
   onCloseLandedCost: () => void;
+  onExportarFrete: (d: { freteUsd: number; porto: string; rotulo: string }) => void;
+  seedFrete?: { freteUsd: number; porto: string; rotulo: string } | null;
 }
 
 const formatCurrency = (val: number, curr: string = 'USD') =>
@@ -88,17 +91,21 @@ const getSeverityStyles = (severity: string) => {
   }
 };
 
-export default function Workspace({ status, mode, analysis, savingsBrl, onGenerateLi, onAlertInquire, onOpenLandedCost, onCloseLandedCost }: WorkspaceProps) {
+export default function Workspace({ status, mode, analysis, savingsBrl, onGenerateLi, onAlertInquire, onOpenLandedCost, onCloseLandedCost, onExportarFrete, seedFrete }: WorkspaceProps) {
   // Botão de minuta em estado "Gerando..." (id do alerta ou do item)
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   // Skill densa ocupa o canvas por cima de qualquer estado de auditoria
   if (mode === 'landedCost') {
-    return <LandedCostDrawer onClose={onCloseLandedCost} />;
+    return <LandedCostDrawer onClose={onCloseLandedCost} seedFrete={seedFrete} />;
   }
 
   if (mode === 'compliance') {
     return <ComplianceWorkspace onClose={onCloseLandedCost} />;
+  }
+
+  if (mode === 'freight') {
+    return <FreightWorkspace onClose={onCloseLandedCost} onExportarParaCusteio={onExportarFrete} />;
   }
 
   // Vincula um alerta ao item da fatura correspondente para prefill da LI

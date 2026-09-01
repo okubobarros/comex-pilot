@@ -20,7 +20,20 @@ import CostingCanvas from './costing/CostingCanvas';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
+  /** Frete trazido da Cotação de Frete Marítimo (ver freight/FreightWorkspace). */
+  seedFrete?: { freteUsd: number; porto: string; rotulo: string } | null;
 }
+
+/**
+ * Portos de entrada. A UF entre parênteses é o que determina a alíquota de
+ * ICMS, então a lista precisa cobrir todos os destinos da rate sheet — sem
+ * Itapoá ou Navegantes, um frete cotado para SC seria custeado como SP.
+ */
+const PORTOS_ENTRADA = [
+  'Santos (SP)', 'Paranaguá (PR)', 'Itajaí (SC)', 'Itapoá (SC)', 'Navegantes (SC)',
+  'Rio de Janeiro (RJ)', 'Rio Grande (RS)', 'Vitória (ES)', 'Salvador (BA)',
+  'Suape (PE)', 'Pecém (CE)', 'Manaus (AM)', 'Vila do Conde (PA)', 'Viracopos (SP)',
+];
 
 const DEFAULTS: LandedCostInputs = {
   productDescription: '',
@@ -43,7 +56,7 @@ const STEPS = ['Produto e Origem', 'Rota Tributária e Portos', 'Margem e Target
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
+export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawerProps) {
   const [step, setStep] = useState(0);
   const [inputs, setInputs] = useState<LandedCostInputs>(DEFAULTS);
   const [rawData, setRawData] = useState('');
@@ -97,6 +110,21 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
 
   // Deriva a UF a partir do porto de entrada (ex.: "Santos (SP)" → "SP").
   const ufFromPort = (p: string) => p.match(/\(([A-Z]{2})\)/)?.[1] ?? 'SP';
+
+  /**
+   * Frete vindo da cotação marítima: preenche o campo e alinha o porto de
+   * entrada ao POD cotado — o ICMS depende da UF, então importar o valor sem o
+   * porto produziria um custo errado em silêncio.
+   */
+  useEffect(() => {
+    if (!seedFrete) return;
+    setInputs((prev) => {
+      const porto = PORTOS_ENTRADA.find((p) => p.toLowerCase().startsWith(seedFrete.porto.toLowerCase()));
+      return { ...prev, freightUsd: seedFrete.freteUsd, entryPort: porto ?? prev.entryPort };
+    });
+    setAiFilled((prev) => new Set(prev).add('freightUsd'));
+    setPrefillNote(`Frete de USD ${seedFrete.freteUsd.toLocaleString('pt-BR')} importado da cotação: ${seedFrete.rotulo}.`);
+  }, [seedFrete]);
 
   // Aplica um resultado de custeio (do backend ou do fallback local) na UI + trilha.
   const applyCosting = (result: CostingResult, r: CostingRates, origem: string) => {
@@ -328,7 +356,7 @@ export default function LandedCostDrawer({ onClose }: LandedCostDrawerProps) {
               <div>
                 <label className={labelClass}>Porto / recinto de entrada</label>
                 <select className={inputClass} value={inputs.entryPort} onChange={(e) => set('entryPort', e.target.value)}>
-                  {['Santos (SP)', 'Paranaguá (PR)', 'Itajaí (SC)', 'Viracopos (SP)', 'Rio de Janeiro (RJ)'].map((p) => <option key={p}>{p}</option>)}
+                  {PORTOS_ENTRADA.map((p) => <option key={p}>{p}</option>)}
                 </select>
               </div>
               <div>

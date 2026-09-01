@@ -16,6 +16,7 @@ import { ptaxHandler } from "./ptaxService.js";
 import { normaHandler } from "./normaService.js";
 import { satGraphTestHandler, satGraphNcmHandler } from "./satGraphService.js";
 import { classifyHandler } from "./classifyService.js";
+import { freightOptionsHandler, freightQuotesHandler, freightIssuesHandler } from "./freightService.js";
 import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./llm.js";
 
 dotenv.config();
@@ -34,6 +35,11 @@ app.get("/api/sat-graph/test", satGraphTestHandler);
 app.get("/api/sat-graph/ncm/:code", satGraphNcmHandler);
 // Classificação fiscal pelo grafo (descrição → NCM + órgãos anuentes).
 app.post("/api/classify", classifyHandler);
+
+// Cotacao de frete maritimo (rate sheet desagrupada)
+app.get("/api/freight/options", freightOptionsHandler);
+app.get("/api/freight/quotes", freightQuotesHandler);
+app.get("/api/freight/issues", freightIssuesHandler);
 
 const PORT = Number(process.env.PORT ?? 3000);
 

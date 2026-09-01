@@ -53,6 +53,8 @@ export default function App() {
   const [liPrefill, setLiPrefill] = useState<LiPrefillData | null>(null);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('audit');
+  // Frete cotado no comparador marítimo, a caminho do formulário de custeio.
+  const [seedFrete, setSeedFrete] = useState<{ freteUsd: number; porto: string; rotulo: string } | null>(null);
   const [view, setView] = useState<AppView>('home');
   const [chatIntent, setChatIntent] = useState<ChatIntent>('audit');
   const { setEvidence } = useEvidence();
@@ -364,6 +366,19 @@ export default function App() {
 
   /* ---------- Skill: Landed Cost ---------- */
 
+  /**
+   * Frete escolhido na Cotação de Frete Marítimo. Fica no App porque atravessa
+   * dois canvas: sai do comparador e entra no formulário de custeio.
+   */
+  const exportarFreteParaCusteio = (d: { freteUsd: number; porto: string; rotulo: string }) => {
+    setSeedFrete(d);
+    setWorkspaceMode('landedCost');
+    pushMessage({
+      role: 'assistant',
+      text: `Levei o frete de **USD ${d.freteUsd.toLocaleString('pt-BR')}** (${d.rotulo}) para o Custeio de Importação e ajustei o porto de entrada para **${d.porto}** — o ICMS depende da UF de desembaraço.`,
+    });
+  };
+
   const openLandedCost = () => {
     setWorkspaceMode('landedCost');
     pushMessage({ role: 'assistant', text: 'Abri a skill **Custeio e Viabilidade (Landed Cost)** no canvas. Arraste uma Invoice ou cole os dados brutos no topo do formulário para eu pré-preencher os campos automaticamente.' });
@@ -394,6 +409,13 @@ export default function App() {
       return;
     }
 
+    if (taskId === 'freight') {
+      setWorkspaceMode('freight');
+      setView('workspace');
+      pushMessage({ role: 'assistant', text: 'Abri a **Cotação de Frete Marítimo** no canvas. Escolha origem, destino e equipamento — e informe o peso para eu aplicar as faixas de tarifa e as taxas de excesso no custo total.' });
+      return;
+    }
+
     if (taskId === 'landedCost') {
       setView('workspace');
       openLandedCost();
@@ -410,7 +432,7 @@ export default function App() {
       return;
     }
 
-    // checklist, freight, margin, ncm, antidumping ainda não disponíveis:
+    // checklist, margin, ncm, antidumping ainda não disponíveis:
     // a UI já as marca como "em breve" e bloqueia o clique, então isto é só
     // uma salvaguarda que não deveria ser alcançada.
   };
@@ -501,6 +523,7 @@ export default function App() {
     view === 'home' ? null
     : workspaceMode === 'landedCost' ? 'landedCost'
     : workspaceMode === 'compliance' ? 'compliance'
+    : workspaceMode === 'freight' ? 'freight'
     : chatIntent === 'classify' ? 'classify'
     : 'audit';
 
@@ -563,6 +586,8 @@ export default function App() {
             onGenerateLi={openLiMinuta}
             onAlertInquire={handleAlertInquire}
             onOpenLandedCost={openLandedCost}
+            onExportarFrete={exportarFreteParaCusteio}
+            seedFrete={seedFrete}
             onCloseLandedCost={closeLandedCost}
           />
         </>

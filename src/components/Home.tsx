@@ -7,7 +7,7 @@
  * mostra o ESTADO REAL das operações (Pendente / Em Análise / Concluído).
  */
 import React, { useState } from 'react';
-import { ArrowUp, Calculator, FileText, Scale, Sparkles, Target } from 'lucide-react';
+import { ArrowUp, Calculator, FileText, Scale, Ship, Sparkles, Target } from 'lucide-react';
 import type { TaskId } from '../types';
 import { useProcessos, Processo, ProcStatus } from '../context/ProcessContext';
 import type { AgentId } from './os/AgentDock';
@@ -22,6 +22,7 @@ interface HomeProps {
 const INTENT_SHORTCUTS: { id: TaskId; label: string; icon: React.ReactNode }[] = [
   { id: 'audit', label: 'Auditar documentos', icon: <Target className="h-3.5 w-3.5" /> },
   { id: 'landedCost', label: 'Calcular custo', icon: <Calculator className="h-3.5 w-3.5" /> },
+  { id: 'freight', label: 'Cotar frete', icon: <Ship className="h-3.5 w-3.5" /> },
   { id: 'classify', label: 'Classificar NCM', icon: <Scale className="h-3.5 w-3.5" /> },
   { id: 'risk', label: 'Analisar risco', icon: <FileText className="h-3.5 w-3.5" /> },
 ];

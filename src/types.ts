@@ -56,7 +56,7 @@ export type TaskId =
   | 'antidumping';
 
 /** Modo do canvas da direita: auditoria, Landed Cost ou Conformidade (SAT-Graph) */
-export type WorkspaceMode = 'audit' | 'landedCost' | 'compliance';
+export type WorkspaceMode = 'audit' | 'landedCost' | 'compliance' | 'freight';
 
 /** Intenção multimodal ativa na barra de comando do chat */
 export type ChatIntent = 'audit' | 'classify' | 'risk';
