@@ -27,6 +27,9 @@ Uma fonte de verdade: as rotas são registradas uma vez e valem para dev e produ
 | `NEO4J_DATABASE` | `neo4j` | opcional (o app resolve sozinho) |
 | `DATABASE_URL` | connection string do Supabase | custeio/normas com o banco completo |
 | `GEMINI_API_KEY` | chave do Gemini | análise de invoice (sem ela, modo simulado) |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | modelo primário — trocar aqui, sem mexer no código |
+| `OPENROUTER_API_KEY` | chave do OpenRouter | **redundância** quando o Gemini bate rate limit |
+| `OPENROUTER_MODEL` | `meta-llama/llama-3.3-70b-instruct:free` | modelo do fallback |
 
 `BCB_PTAX_BASE` tem default no código — não precisa cadastrar.
 
@@ -43,3 +46,17 @@ curl https://comex-pilot.vercel.app/api/sat-graph/test
 
 ## Dev local não muda
 `npm run dev` continua subindo Express + Vite na porta 3000, como antes.
+
+
+## Modelos de linguagem — primário e redundância
+
+O modelo **não é hardcoded**: vem de `GEMINI_MODEL` (default `gemini-3.5-flash`).
+Trocar de modelo é trocar a variável e redeployar.
+
+O **OpenRouter é redundância, não substituto**: só entra quando o Gemini falha
+por rate limit/quota (HTTP 429/503 ou mensagem de quota). Sem
+`OPENROUTER_API_KEY`, o fallback é pulado e a rota cai na heurística local.
+
+A resposta de `/api/analyze-invoice` informa qual caminho foi usado no campo
+`method`: `gemini_ai_auditor` · `openrouter_fallback` · `expert_heuristics_fallback`.
+O log de inicialização também mostra a configuração ativa.

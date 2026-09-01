@@ -12,6 +12,7 @@ import { costingHandler } from "./server/costingService";
 import { ptaxHandler } from "./server/ptaxService";
 import { normaHandler } from "./server/normaService";
 import { satGraphTestHandler, satGraphNcmHandler } from "./server/satGraphService";
+import { GEMINI_MODEL, OPENROUTER_MODEL, callOpenRouter, extractJson, isRateLimitOrQuota } from "./server/llm";
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ if (apiKey && apiKey !== "MY_GEMINI_API_KEY") {
 } else {
   console.log("Gemini API Key missing or using placeholder. Running in simulated/expert-rules mode for custom uploads.");
 }
+console.log(`LLM: Gemini=${GEMINI_MODEL} | fallback OpenRouter=${OPENROUTER_MODEL}${process.env.OPENROUTER_API_KEY ? "" : " (sem chave — fallback desativado)"}`);
 
 // Custom Interfaces matching types.ts
 interface NcmRule {
@@ -345,15 +347,16 @@ function runAuditEngine(items: any[], rules: NcmRule[]): any[] {
 
 // REST API for Invoice Analysis using server-side Gemini 3.5-flash
 app.post("/api/analyze-invoice", async (req: Request, res: Response) => {
+  // Declarados fora do try para que o catch (fallback OpenRouter) os enxergue.
+  const { invoiceText, customRules } = req.body ?? {};
+  const rulesList: NcmRule[] = customRules && Array.isArray(customRules) ? customRules : [];
+
+  if (!invoiceText || typeof invoiceText !== "string") {
+    res.status(400).json({ error: "O texto da invoice é obrigatório para realizar a análise." });
+    return;
+  }
+
   try {
-    const { invoiceText, customRules } = req.body;
-
-    if (!invoiceText || typeof invoiceText !== "string") {
-       res.status(400).json({ error: "O texto da invoice é obrigatório para realizar a análise." });
-       return;
-    }
-
-    const rulesList: NcmRule[] = customRules && Array.isArray(customRules) ? customRules : [];
 
     // Fallback if Gemini client is not initialized
     if (!ai) {
@@ -386,11 +389,12 @@ app.post("/api/analyze-invoice", async (req: Request, res: Response) => {
       return;
     }
 
-    console.log("Calling server-side Gemini 3.5-flash to extract items from custom Invoice...");
-    
+    console.log(`Calling server-side ${GEMINI_MODEL} to extract items from custom Invoice...`);
+
+    let llmMethod = "gemini_ai_auditor";
     // Call Gemini with strict JSON Schema
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: GEMINI_MODEL,
       contents: `Análise técnica da Invoice comercial de importação anexada. 
       Extraia todos os itens e converta-os em uma lista JSON estruturada contendo:
       - description (Commercial description in English or original language)
@@ -440,6 +444,7 @@ app.post("/api/analyze-invoice", async (req: Request, res: Response) => {
 
     const parsedJson = JSON.parse(text.trim());
     const extractedItems = parsedJson.items || [];
+    llmMethod = "gemini_ai_auditor";
 
     // Map extracted items to full InvoiceItem type and run expert system
     const itemsWithIds = extractedItems.map((item: any, idx: number) => ({
@@ -475,6 +480,53 @@ app.post("/api/analyze-invoice", async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("Error analyzing invoice via Gemini:", error);
+
+    // REDUNDÂNCIA: se o Gemini caiu por rate limit/quota, tenta o OpenRouter.
+    // Não é substituto — só entra quando o primário falha por indisponibilidade.
+    if (isRateLimitOrQuota(error)) {
+      console.warn(`Gemini indisponível (rate limit/quota). Tentando fallback ${OPENROUTER_MODEL}...`);
+      const raw = await callOpenRouter(
+        `Extraia os itens desta Invoice de importação e responda APENAS com JSON no formato ` +
+        `{"items":[{"description":"","ncm":"8 dígitos","unitPrice":0,"currency":"USD","quantity":0,"countryOfOrigin":"","additionalDetails":""}]}.
+
+Invoice:
+${invoiceText}`,
+        { json: true }
+      );
+      const parsed = raw ? (extractJson(raw) as any) : null;
+      const items = parsed?.items;
+      if (Array.isArray(items) && items.length) {
+        const itemsWithIds = items.map((item: any, idx: number) => ({
+          id: `item-or-${idx}`,
+          description: item.description,
+          ncm: item.ncm ? String(item.ncm).replace(/[^0-9]/g, "") : "",
+          unitPrice: Number(item.unitPrice) || 0,
+          currency: item.currency || "USD",
+          quantity: Number(item.quantity) || 1,
+          totalPrice: (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1),
+          countryOfOrigin: item.countryOfOrigin || "China",
+          additionalDetails: item.additionalDetails || ""
+        }));
+        const alerts = runAuditEngine(itemsWithIds, rulesList);
+        res.json({
+          success: true,
+          method: "openrouter_fallback",
+          analysis: {
+            fileName: "CUSTOM_INVOICE_UPLOAD.txt",
+            analyzedAt: new Date().toISOString(),
+            totalFobUsd: itemsWithIds.reduce((a: number, c: any) => a + c.totalPrice, 0),
+            currency: "USD",
+            items: itemsWithIds,
+            alerts,
+            riskScore: calculateRiskScore(alerts),
+            isCustomUpload: true
+          }
+        });
+        return;
+      }
+      console.warn("Fallback OpenRouter não retornou itens utilizáveis.");
+    }
+
     res.status(500).json({ 
       error: "Falha ao processar e auditar a invoice comercial.",
       details: error.message 
@@ -508,7 +560,7 @@ app.post("/api/transcribe-audio", async (req: Request, res: Response) => {
     // Run Gemini 3.5-flash to write a detailed, highly intelligent, friendly custom voice note answer
     if (ai) {
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: GEMINI_MODEL,
         contents: `Você é o ComexPilot, assistente especialista em comércio exterior brasileiro.
         Dê um parecer profissional, extremamente prático e direto em português sobre a seguinte mensagem transcrita de áudio:
         "${transcript}"
