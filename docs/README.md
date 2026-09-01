@@ -25,6 +25,7 @@ aduaneira e tributária) e do **ComexPilot** (o app que a materializa).
 | [ops/sat-graph.md](ops/sat-graph.md) | Integração Neo4j (SAT-Graph): motor de conformidade por NCM — como conectar, rotas e caveat de produção |
 | [ops/deploy.md](ops/deploy.md) | Deploy na Vercel: API serverless + variáveis de ambiente a cadastrar |
 | [ops/dominio.md](ops/dominio.md) | Mover comexpilot.com do projeto antigo para este (Vercel + Cloudflare) |
+| [analise/conformidade-estado-atual.md](analise/conformidade-estado-atual.md) | Auditoria técnica da tela de Conformidade: arquitetura, fluxo de dados e 8 pontos cegos de UX |
 | [roadmap/sprints.md](roadmap/sprints.md) | Plano de sprints derivado do roadmap do PRD |
 
 ## Como reproduzir "a ideia do app real"
