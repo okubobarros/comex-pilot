@@ -29,7 +29,7 @@ import {
 import { useEvidence } from '../../context/EvidenceContext';
 import FreightRadar, { Corredor } from './FreightRadar';
 import FreightMap, { ArcoRota } from './FreightMap';
-import { estimarTransito } from '../../engine/freight';
+import { estimarTransito, temTarifaSuspeita } from '../../engine/freight';
 import type { Cotacao, LinhaCusto } from '../../engine/freight';
 
 interface FreightWorkspaceProps {
@@ -224,12 +224,13 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
     let l = cotacoes ?? [];
     if (servico) l = l.filter((c) => c.quote.service_type === servico);
     const copia = [...l];
-    if (aba === 'baratas') return copia.sort((a, b) => a.totalUsd - b.totalUsd);
+    const susp = (c: Cotacao) => (temTarifaSuspeita(c) ? 1 : 0);
+    if (aba === 'baratas') return copia.sort((a, b) => susp(a) - susp(b) || a.totalUsd - b.totalUsd);
     if (aba === 'rapidas') {
       // Ordena pelo trânsito ESTIMADO (distância real + penalidade de
       // transbordo). Sem coordenadas, a cotação vai para o fim.
       const dias = (c: Cotacao) => estimarTransito(c.quote)?.dias ?? 9_999;
-      return copia.sort((a, b) => dias(a) - dias(b) || a.totalUsd - b.totalUsd);
+      return copia.sort((a, b) => susp(a) - susp(b) || dias(a) - dias(b) || a.totalUsd - b.totalUsd);
     }
     return copia; // já vem ordenada por vigência + custo do backend
   }, [cotacoes, aba, servico]);
@@ -272,10 +273,12 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
     return arcosDaRede;
   }, [cotacoes, arcosDaRede]);
 
-  const maisBarata = useMemo(
-    () => (lista.length ? Math.min(...lista.map((c) => c.totalUsd)) : 0),
-    [lista],
-  );
+  // O piso de preço da lista ignora tarifas suspeitas: senão o selo "menor
+  // custo" premiaria justamente o número corrompido.
+  const maisBarata = useMemo(() => {
+    const limpas = lista.filter((c) => !temTarifaSuspeita(c));
+    return limpas.length ? Math.min(...limpas.map((c) => c.totalUsd)) : 0;
+  }, [lista]);
 
   return (
     <section className="relative flex h-full flex-1 flex-col overflow-hidden bg-slate-50" id="freight-workspace">
@@ -441,9 +444,13 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
         </div>
       </header>
 
-      {/* ---------- Canvas do mapa ---------- */}
+      {/* ---------- Corpo: uma única barra de rolagem ---------- */}
+      {/* O mapa (359px) mais o cabeçalho (290px) não deixavam altura para a
+          lista: ela ficava com 13px visíveis. Agora tudo rola junto — o mapa
+          sobe e sai, o painel da direita fica grudado no topo. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-3" id="freight-scroll">
       {vista === 'mapa' && (
-        <div className="shrink-0 px-6 pt-3">
+        <div>
           <FreightMap
             arcos={arcos}
             contexto={cotacoes?.length ? arcosDaRede : []}
@@ -454,16 +461,18 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
               else buscar({ pol: a.pol, pod: a.pod });
             }}
             titulo={cotacoes ? 'Rotas da busca' : 'Rede de corredores'}
-            altura={330}
+            altura={300}
           />
         </div>
       )}
 
       {/* ---------- Split view ---------- */}
-      <div className="flex min-h-0 flex-1 gap-4 px-6 pb-4 pt-3">
+      <div className="mt-3 flex gap-4">
         {/* Coluna esquerda — opções ranqueadas */}
-        <div className="flex min-w-0 flex-[60] flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center gap-1 pb-2">
+        <div className="flex min-w-0 flex-[60] flex-col">
+          {/* Abas grudam no topo ao rolar: trocar de ordenação não exige
+              voltar para cima. */}
+          <div className="sticky top-0 z-10 flex items-center gap-1 bg-slate-50/95 pb-2 backdrop-blur">
             {ABAS.map((a) => (
               <button
                 key={a.id}
@@ -482,11 +491,11 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
               </span>
             )}
           </div>
-          <p className="shrink-0 pb-2 text-[10px] leading-relaxed text-slate-400">
+          <p className="pb-2 text-[10px] leading-relaxed text-slate-400">
             {ABAS.find((a) => a.id === aba)!.nota}
           </p>
 
-          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+          <div className="space-y-2.5">
             {erro && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {erro}
@@ -525,8 +534,8 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
         </div>
 
         {/* Coluna direita — card flutuante de detalhamento */}
-        <div className="hidden w-[38%] min-w-[300px] shrink-0 lg:block">
-          <div className="sticky top-0 flex max-h-full flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
+        <div className="hidden w-[38%] min-w-[300px] shrink-0 self-start lg:block">
+          <div className="sticky top-0 flex max-h-[calc(100vh-13rem)] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
             <PainelDetalhe
               c={selecionada}
               onBooking={() => selecionada && setBooking(selecionada)}
@@ -540,6 +549,8 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
             />
           </div>
         </div>
+      </div>
+
       </div>
 
       {booking && <ModalBooking c={booking} onClose={() => setBooking(null)} />}
@@ -587,6 +598,7 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
   const taxas = c.totalUsd - c.tarifaAplicada;
   const direto = q.service_type === 'Direct';
   const transito = estimarTransito(q);
+  const suspeita = temTarifaSuspeita(c);
 
   return (
     <button
@@ -603,15 +615,25 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-base font-semibold tracking-tight text-slate-900">{q.carrier}</span>
-            {posicao === 0 && (
-              <span className="rounded-md bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                #1 recomendada
+            {/* Selo de vencedor nunca vai para uma tarifa que sabemos estar
+                corrompida — ela ganha o aviso no lugar. */}
+            {suspeita ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                <AlertTriangle className="h-2.5 w-2.5" /> dado suspeito
               </span>
-            )}
-            {ehMaisBarata && posicao !== 0 && (
-              <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                menor custo
-              </span>
+            ) : (
+              <>
+                {posicao === 0 && (
+                  <span className="rounded-md bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    #1 recomendada
+                  </span>
+                )}
+                {ehMaisBarata && posicao !== 0 && (
+                  <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    menor custo
+                  </span>
+                )}
+              </>
             )}
           </div>
 
@@ -659,7 +681,9 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
         </div>
 
         <div className="shrink-0 text-right">
-          <span className="block font-display text-xl font-bold tabular-nums tracking-tight text-emerald-600">
+          <span className={`block font-display text-xl font-bold tabular-nums tracking-tight ${
+            suspeita ? 'text-slate-400 line-through decoration-rose-300' : 'text-emerald-600'
+          }`}>
             {usd(c.totalUsd)}
           </span>
           <span className="mt-0.5 block text-[11px] text-slate-400">

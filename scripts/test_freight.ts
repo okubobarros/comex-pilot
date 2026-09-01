@@ -5,7 +5,7 @@
  * VGM × peso de mercadoria, taxas escalonadas de excesso e vigência. Os casos
  * usam células REAIS da rate sheet 0901 (aba e linha citadas em cada bloco).
  */
-import { cotar, distanciaNm, estimarTransito, ordenarPorCusto, pesoNaBase, FreightQuote, Surcharge } from '../src/engine/freight';
+import { cotar, distanciaNm, estimarTransito, ordenarPorCusto, pesoNaBase, temTarifaSuspeita, FreightQuote, Surcharge } from '../src/engine/freight';
 
 let falhas = 0;
 const eq = (nome: string, got: unknown, exp: unknown) => {
@@ -124,6 +124,28 @@ eq('marcado como estimado', tDireto.estimado, true);
 const tTransbordo = estimarTransito({ ...base, ...coordSSZ, service_type: 'Transhipment' })!;
 eq('transbordo soma 7 dias sobre o direto', tTransbordo.dias - tDireto.dias, 7);
 eq('sem coordenadas não estima', estimarTransito({ ...base, pol_lat: null, pol_lon: null }), null);
+
+// ---- G: tarifa com ressalva de qualidade não pode liderar ------------------
+// Brasil!L23 traz "1000" onde deveria haver "10000" (a PIL de Chongqing).
+console.log('\nCaso G — tarifa corrompida não lidera o ranking:');
+const suspeita: FreightQuote = {
+  ...base, base_rate: 1000, adjusted_rate: null, weight_operator: null,
+  weight_limit_ton: null, weight_basis: null, surcharges: [], source_row: 23,
+  data_issues: [{ kind: 'tarifa', severity: 'aviso', detail: 'tarifa_base_menor_que_desconto' }],
+};
+const cSuspeita = cotar(suspeita, { hoje: HOJE });
+const cLimpa = cotar(base, { pesoTon: 15, hoje: HOJE });
+eq('detecta a ressalva de tarifa', temTarifaSuspeita(cSuspeita), true);
+eq('cotação limpa não é marcada', temTarifaSuspeita(cLimpa), false);
+eq('a suspeita custa 1/9 e mesmo assim NÃO lidera',
+  ordenarPorCusto([cSuspeita, cLimpa])[0].quote.source_row, 14);
+contem('a ressalva chega ao usuário como alerta', cSuspeita.alertas, 'Qualidade do dado');
+// Ressalva que não é de tarifa (porto fora do dicionário) não desqualifica preço.
+const outraRessalva = cotar(
+  { ...base, data_issues: [{ kind: 'porto_nao_mapeado', severity: 'aviso', detail: 'Shanshan' }] },
+  { pesoTon: 15, hoje: HOJE },
+);
+eq('ressalva de porto não desqualifica a tarifa', temTarifaSuspeita(outraRessalva), false);
 
 console.log(`\n${falhas === 0 ? 'TODOS OS TESTES PASSARAM' : `${falhas} FALHA(S)`}`);
 process.exit(falhas === 0 ? 0 : 1);

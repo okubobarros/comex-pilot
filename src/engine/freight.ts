@@ -259,10 +259,32 @@ export function cotar(q: FreightQuote, p: ParamsCotacao = {}): Cotacao {
   };
 }
 
-/** Ordena por total; vigência empata o critério — tarifa expirada nunca lidera. */
+/**
+ * A cotação vem de uma linha que o ETL marcou como suspeita?
+ *
+ * Só ressalvas de TARIFA contam: são as que corrompem o número (dígito
+ * faltando, valor implausível). Aviso de porto ou de validade não desqualifica
+ * o preço.
+ */
+export function temTarifaSuspeita(c: Cotacao): boolean {
+  return (c.quote.data_issues ?? []).some((i) => i.kind === 'tarifa');
+}
+
+/**
+ * Ordena por total, com duas demoções antes do preço.
+ *
+ * Tarifa expirada nunca lidera — sem essa regra a HPL a USD 1.915, vencida há
+ * cinco meses, apareceria como melhor opção para Montevidéu.
+ *
+ * Tarifa com ressalva de qualidade também não: a PIL de Chongqing sai por
+ * USD 1.015 porque a planilha tem "1000" onde deveria haver "10000". Coroar de
+ * "recomendada" um número que sabemos estar errado é pior do que não mostrá-lo.
+ * Ela continua na lista, com o alerta, para quem quiser conferir a origem.
+ */
 export function ordenarPorCusto(cs: Cotacao[]): Cotacao[] {
   const peso: Record<StatusValidade, number> = { vigente: 0, expirando: 1, sem_validade: 2, expirado: 3 };
-  return [...cs].sort((a, b) => peso[a.status] - peso[b.status] || a.totalUsd - b.totalUsd);
+  const rank = (c: Cotacao) => peso[c.status] + (temTarifaSuspeita(c) ? 10 : 0);
+  return [...cs].sort((a, b) => rank(a) - rank(b) || a.totalUsd - b.totalUsd);
 }
 
 /* ------------------------------------------------------------------ *
