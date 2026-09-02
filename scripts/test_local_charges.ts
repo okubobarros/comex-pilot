@@ -14,7 +14,7 @@
  * O caso de Itapoá é o mesmo de scripts/test_sql.mjs: se os dois testes
  * passarem com os mesmos números, as implementações concordam.
  */
-import { calcularCustoLocal, porEntidade } from '../src/engine/localCharges';
+import { calcularCustoLocal, porEntidade, rescalarPorContainers } from '../src/engine/localCharges';
 import type { ChargeIssue, LocalCharge } from '../src/engine/localCharges';
 import dataset from '../src/data/localCharges.json';
 
@@ -94,6 +94,40 @@ eq('a ressalva cita THC ou BL FEE',
 // BL, então não escala. É justamente isso que a ressalva avisa.
 eq('o dado não foi "consertado": THC da ONE segue como BL',
   one.linhas.find((l) => l.fee_code === 'THC')?.calculation_unit, 'BL');
+
+// ---------------------------------------------------------------------------
+// Mudar a quantidade DENTRO do custeio, a partir da composição unitária.
+// É onde uma regra de três sobre o total cobraria BL fee por contêiner.
+// ---------------------------------------------------------------------------
+console.log('\nRescalar por contêineres (Itapoá · PIL):');
+const fx = 5.4;
+// Sem arredondar os componentes: é assim que a tela de frete os envia, e é o
+// que garante que rescalar para a MESMA quantidade devolva o MESMO número.
+const unit = {
+  fretePorContainerUsd: 9700,
+  taxasPorBlUsd: 620 / fx + 200,          // BRL por BL + USD por BL
+  taxasPorContainerUsd: 1370 / fx + 121,  // BRL por ctr + USD por ctr
+};
+const r1 = rescalarPorContainers(unit, 1);
+const r2 = rescalarPorContainers(unit, 2);
+const r3 = rescalarPorContainers(unit, 3);
+
+eq('1 contêiner reproduz o cálculo original', r1.taxasLocaisUsd,
+  calcularCustoLocal(charges, issues, { pod: 'BRIOA', carrier: 'PIL', containers: 1, usdBrl: fx })!.totalUsd);
+eq('2 contêineres reproduzem o cálculo original', r2.taxasLocaisUsd, c.totalUsd);
+// O invariante que sustenta o campo do custeio: importar com N contêineres e
+// importar com 1 e depois mudar para N precisam dar o MESMO número. Se
+// divergirem, o operador vê o valor mudar sozinho ao redigitar a quantidade.
+eq('3 contêineres reproduzem o cálculo original', r3.taxasLocaisUsd,
+  calcularCustoLocal(charges, issues, { pod: 'BRIOA', carrier: 'PIL', containers: 3, usdBrl: fx })!.totalUsd);
+eq('frete escala linearmente', [r1.freteUsd, r2.freteUsd, r3.freteUsd], [9700, 19400, 29100]);
+// A regra que esta função protege: se a taxa por BL escalasse, 3 contêineres
+// dariam 3x o valor de 1. A diferença é exatamente 2x a parte por BL.
+eq('taxa por BL NÃO triplica', r3.taxasLocaisUsd !== r1.taxasLocaisUsd * 3, true);
+eq('a diferença entre 3x e 1x é só a parte por contêiner',
+  Math.round((r3.taxasLocaisUsd - r1.taxasLocaisUsd) * 100) / 100,
+  Math.round(unit.taxasPorContainerUsd * 2 * 100) / 100);
+eq('quantidade inválida vira 1', rescalarPorContainers(unit, 0).freteUsd, 9700);
 
 console.log('\nBordas:');
 eq('porto sem taxa cadastrada devolve null (≠ custo zero)',

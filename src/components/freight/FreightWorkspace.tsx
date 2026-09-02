@@ -52,6 +52,12 @@ interface FreightWorkspaceProps {
     taxasLocaisUsd?: number;
     containers?: number;
     usdBrl?: number;
+    /** Composição unitária, para o Custeio poder mudar a quantidade sozinho. */
+    fretePorContainerUsd?: number;
+    /** Taxas cobradas UMA vez por embarque — não escalam. */
+    taxasPorBlUsd?: number;
+    /** Taxas por contêiner, já em USD. */
+    taxasPorContainerUsd?: number;
   }) => void;
 }
 
@@ -627,15 +633,31 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
                   const internacional = selecionada.totalUsd * qtd;
                   // Sem PTAX o custo local não é somável — vai só o frete, e o
                   // painel de detalhe já avisou o operador do porquê.
-                  const locais = ptax && custoLocal ? custoLocal.totalUsd : 0;
+                  const usa = ptax ? custoLocal : null;
+                  const locais = usa ? usa.totalUsd : 0;
+                  const fx = ptax?.usdBrl ?? 0;
+                  // A composição UNITÁRIA viaja junto para que mudar a
+                  // quantidade dentro do Custeio recalcule certo: o frete e as
+                  // taxas por contêiner escalam, as taxas por BL não. Sem estes
+                  // três números, rescalar lá dentro seria uma regra de três
+                  // que cobraria BL fee e DESCO uma vez por contêiner.
                   onExportarParaCusteio({
                     freteUsd: internacional + locais,
                     freteInternacionalUsd: internacional,
                     taxasLocaisUsd: locais,
                     containers: qtd,
                     usdBrl: ptax?.usdBrl,
+                    // Sem arredondar aqui: dois arredondamentos em cadeia
+                    // (componente e depois total) deslocam o resultado em um
+                    // centavo, e um número que muda ao redigitar a MESMA
+                    // quantidade parece defeito. Quem arredonda é o fim da conta.
+                    fretePorContainerUsd: selecionada.totalUsd,
+                    taxasPorBlUsd: usa && fx > 0 ? usa.porBlUsd + usa.porBlBrl / fx : 0,
+                    taxasPorContainerUsd: usa && fx > 0
+                      ? (usa.porCntrUsd + usa.porCntrBrl / fx) / qtd
+                      : 0,
                     porto: selecionada.quote.pod_name,
-                    rotulo: `${selecionada.quote.carrier} ${selecionada.quote.pol_name} → ${selecionada.quote.pod_name} (${qtd}x ${selecionada.quote.equipment_type})`,
+                    rotulo: `${selecionada.quote.carrier} ${selecionada.quote.pol_name} → ${selecionada.quote.pod_name} (${selecionada.quote.equipment_type})`,
                   });
                 })()
               }

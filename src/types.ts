@@ -119,6 +119,12 @@ export interface LandedCostInputs {
    * muda conforme o entendimento aplicado.
    */
   outrasDespesasBrl?: number;
+  /**
+   * Quantidade de contêineres do embarque. Só aparece quando um frete foi
+   * importado da cotação — é a partir da composição unitária dela que o frete
+   * e as despesas são recalculados ao mudar este número.
+   */
+  containers?: number;
   iiRate: number;
   ipiRate: number;
   icmsRate: number;

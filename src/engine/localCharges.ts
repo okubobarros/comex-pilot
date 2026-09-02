@@ -176,6 +176,35 @@ export function calcularCustoLocal(
   };
 }
 
+/** Composição unitária de um embarque, o bastante para mudar a quantidade. */
+export interface ComposicaoUnitaria {
+  /** Frete internacional de UM contêiner, em USD. */
+  fretePorContainerUsd: number;
+  /** Taxas cobradas uma vez por embarque, em USD. Não escalam. */
+  taxasPorBlUsd: number;
+  /** Taxas por contêiner, em USD. */
+  taxasPorContainerUsd: number;
+}
+
+/**
+ * Recalcula frete e taxas para outra quantidade de contêineres.
+ *
+ * A regra que esta função existe para proteger: **taxa por BL não escala**.
+ * Uma regra de três sobre o total cobraria BL fee, DESCO, TRS e courier uma
+ * vez por contêiner — num embarque de 3, isso são centenas de dólares
+ * inventados. Por isso a composição chega separada, não como um total.
+ */
+export function rescalarPorContainers(
+  base: ComposicaoUnitaria,
+  containers: number,
+): { freteUsd: number; taxasLocaisUsd: number } {
+  const qtd = Math.max(1, Math.floor(containers) || 1);
+  return {
+    freteUsd: arred(base.fretePorContainerUsd * qtd),
+    taxasLocaisUsd: arred(base.taxasPorBlUsd + base.taxasPorContainerUsd * qtd),
+  };
+}
+
 /** Agrupa as linhas por entidade, que é como o operador lê a fatura. */
 export function porEntidade(c: CustoLocal): { entidade: string; tipo: TipoEntidade; linhas: LinhaTaxaLocal[] }[] {
   const mapa = new Map<string, LinhaTaxaLocal[]>();

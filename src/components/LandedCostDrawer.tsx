@@ -17,6 +17,7 @@ import type { CostingResult, CostingRates } from '../engine/costing';
 import { resolveRatesLocal } from '../engine/offline';
 import { useEvidence } from '../context/EvidenceContext';
 import CostingCanvas from './costing/CostingCanvas';
+import { rescalarPorContainers } from '../engine/localCharges';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
@@ -36,6 +37,9 @@ interface LandedCostDrawerProps {
     taxasLocaisUsd?: number;
     containers?: number;
     usdBrl?: number;
+    fretePorContainerUsd?: number;
+    taxasPorBlUsd?: number;
+    taxasPorContainerUsd?: number;
   } | null;
 }
 
@@ -78,6 +82,16 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
   const [rawData, setRawData] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [prefillNote, setPrefillNote] = useState<string | null>(null);
+  /**
+   * Composição unitária do frete importado. Fica guardada porque mudar a
+   * quantidade de contêineres NÃO é regra de três sobre o total: o frete e as
+   * taxas por contêiner escalam, as taxas por BL (BL fee, DESCO, TRS, courier)
+   * são cobradas uma vez por embarque. Sem separar as duas, dobrar a carga
+   * dobraria a taxa de emissão do conhecimento.
+   */
+  const [baseFrete, setBaseFrete] = useState<{
+    porContainerUsd: number; taxasBlUsd: number; taxasContainerUsd: number; usdBrl: number;
+  } | null>(null);
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
   const [engine, setEngine] = useState<CostingResult | null>(null);
@@ -158,10 +172,20 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
         ...prev,
         freightUsd: internacional,
         outrasDespesasBrl: locaisBrl || prev.outrasDespesasBrl,
+        containers: seedFrete.containers ?? 1,
         usdBrl: seedFrete.usdBrl && seedFrete.usdBrl > 0 ? seedFrete.usdBrl : prev.usdBrl,
         entryPort: porto ?? prev.entryPort,
       };
     });
+    // Guarda a composição unitária para o campo de contêineres poder recalcular.
+    if (seedFrete.fretePorContainerUsd) {
+      setBaseFrete({
+        porContainerUsd: seedFrete.fretePorContainerUsd,
+        taxasBlUsd: seedFrete.taxasPorBlUsd ?? 0,
+        taxasContainerUsd: seedFrete.taxasPorContainerUsd ?? 0,
+        usdBrl: seedFrete.usdBrl && seedFrete.usdBrl > 0 ? seedFrete.usdBrl : 0,
+      });
+    }
     setAiFilled((prev) => {
       const s = new Set(prev).add('freightUsd');
       if ((seedFrete.taxasLocaisUsd ?? 0) > 0) s.add('outrasDespesasBrl');
@@ -274,6 +298,38 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
 
   const num = (key: keyof LandedCostInputs) => (e: React.ChangeEvent<HTMLInputElement>) =>
     set(key, (parseFloat(e.target.value) || 0) as LandedCostInputs[typeof key]);
+
+  /**
+   * Muda a quantidade de contêineres e refaz frete e despesas a partir da
+   * composição unitária da cotação.
+   *
+   * O que escala e o que não escala:
+   *   frete internacional  -> por contêiner, escala
+   *   THC, ISPS, drop off  -> por contêiner, escalam
+   *   BL fee, DESCO, TRS   -> por BL, cobrados UMA vez
+   *
+   * Sobrescreve o que estiver nos dois campos: quem mexe aqui está pedindo o
+   * recálculo. Sem cotação importada o campo nem aparece — não há composição
+   * de onde partir, e rescalar um frete digitado à mão seria adivinhação.
+   */
+  const mudarContainers = (valor: number) => {
+    const qtd = Math.max(1, Math.floor(valor) || 1);
+    if (!baseFrete) { set('containers', qtd); return; }
+    const { freteUsd, taxasLocaisUsd } = rescalarPorContainers({
+      fretePorContainerUsd: baseFrete.porContainerUsd,
+      taxasPorBlUsd: baseFrete.taxasBlUsd,
+      taxasPorContainerUsd: baseFrete.taxasContainerUsd,
+    }, qtd);
+    setInputs((prev) => ({
+      ...prev,
+      containers: qtd,
+      freightUsd: freteUsd,
+      outrasDespesasBrl: baseFrete.usdBrl > 0
+        ? Math.round(taxasLocaisUsd * baseFrete.usdBrl * 100) / 100
+        : prev.outrasDespesasBrl,
+    }));
+    setAiFilled((prev) => new Set(prev).add('freightUsd').add('outrasDespesasBrl'));
+  };
 
   /** Parsing assistido: extrai o 1º item do texto bruto e pré-preenche os inputs. */
   const runAssistedFill = (text: string) => {
@@ -476,6 +532,22 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
                   {PORTOS_ENTRADA.map((p) => <option key={p}>{p}</option>)}
                 </select>
               </div>
+              {/* Só existe com cotação importada: sem a composição unitária
+                  não há de onde rescalar, e um campo que finge recalcular é
+                  pior do que campo nenhum. */}
+              {baseFrete && (
+                <div>
+                  <label className={labelClass}>Contêineres</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className={`${inputClass} font-mono`}
+                    value={inputs.containers || 1}
+                    onChange={(e) => mudarContainers(parseInt(e.target.value, 10))}
+                    title="Recalcula o frete e as taxas por contêiner. As taxas por BL (BL fee, DESCO, TRS, courier) são cobradas uma vez e não mudam."
+                  />
+                </div>
+              )}
               <div>
                 <label className={labelClass}>Frete internacional (USD)</label>
                 <input type="number" className={`${inputClass} font-mono`} value={inputs.freightUsd || ''} onChange={num('freightUsd')} />

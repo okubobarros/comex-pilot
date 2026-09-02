@@ -54,6 +54,14 @@ interface SeedFrete {
   taxasLocaisUsd?: number;
   containers?: number;
   usdBrl?: number;
+  /**
+   * Composição UNITÁRIA. Sem ela o Custeio não conseguiria mudar a quantidade
+   * sem errar: taxa por BL é cobrada uma vez e taxa por contêiner escala, e
+   * uma regra de três sobre o total trataria as duas do mesmo jeito.
+   */
+  fretePorContainerUsd?: number;
+  taxasPorBlUsd?: number;
+  taxasPorContainerUsd?: number;
 }
 
 const WELCOME_MESSAGE: ChatMessage = {
