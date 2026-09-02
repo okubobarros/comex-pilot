@@ -7,6 +7,7 @@
  * e a norma que rege pneus inservíveis (Conama 416/2009) sumia.
  */
 import { extractRef, extractRefs } from '../src/engine/citacoes';
+import { complementaresPara } from '../src/engine/normasComplementares';
 
 let falhas = 0;
 const eq = (nome: string, got: unknown, exp: unknown) => {
@@ -53,6 +54,18 @@ eq('extractRef ainda devolve a primeira',
   extractRef('Decreto 875/1993, Lei 12.305/2010'), 'Decreto 875/1993');
 eq('sem duplicar quando a norma se repete',
   extractRefs('Lei 12.305/2010 e Lei 12.305/2010'), ['Lei 12.305/2010']);
+
+console.log('\nNormas complementares (curadoria fora do Portal Único):');
+const pneu = complementaresPara('4011.10.00');
+eq('pneus novos acham a IN IBAMA 9/2021',
+  pneu.map((n) => n.identificacao), ['Instrução Normativa IBAMA 9/2021']);
+eq('o destaque avisa que NÃO há anuência prévia',
+  pneu[0].destaque.includes('NÃO há anuência prévia'), true);
+eq('4012 (pneus usados) não puxa a norma de pneus novos',
+  complementaresPara('4012.20.00').length, 0);
+eq('NCM de outro capítulo não puxa nada', complementaresPara('3304.99.90').length, 0);
+eq('filtro por órgão bate', complementaresPara('4011.10.00', 'IBAMA').length, 1);
+eq('filtro por outro órgão não bate', complementaresPara('4011.10.00', 'INMETRO').length, 0);
 
 console.log(`\n${falhas === 0 ? 'TODOS OS TESTES PASSARAM' : `${falhas} FALHA(S)`}`);
 process.exit(falhas === 0 ? 0 : 1);

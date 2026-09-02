@@ -18,6 +18,7 @@ import {
   Save, Search, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react';
 import { extractRef, extractRefs } from '../../engine/citacoes';
+import { complementaresPara } from '../../engine/normasComplementares';
 import { useEvidence } from '../../context/EvidenceContext';
 import { useProcessos } from '../../context/ProcessContext';
 import LiMinutaModal from '../LiMinutaModal';
@@ -88,11 +89,25 @@ const val = (v?: string | null): string | null => {
 const impedeDesembaraco = (t: Tratamento): boolean =>
   (t.impede_desembaraco ?? '').toString().trim().toLowerCase().startsWith('s');
 
-/** Órgãos cuja anuência costuma exigir Licença de Importação. */
-const EXIGE_LI = ['ANVISA', 'MCT', 'MCTI', 'MAPA', 'IBAMA', 'DFPC', 'DPF', 'CNEN', 'ANP'];
+/**
+ * Só oferece minuta de LI quando o tratamento REALMENTE exige licença.
+ *
+ * Antes bastava o órgão estar numa lista fixa ('ANVISA', 'IBAMA', ...) para o
+ * botão aparecer. Isso oferecia licença onde ela não existe — o caso que expôs
+ * o erro foi o dos pneus: o TA do IBAMA para NCM 4011 é do tipo "Alerta", e o
+ * art. 25 da IN IBAMA 9/2021 EXTINGUIU a anuência prévia no Siscomex para LI de
+ * pneus novos. Num produto de conformidade, inventar uma exigência é tão grave
+ * quanto esconder uma: leva o despachante a pedir licença inexistente.
+ *
+ * O grafo só tem três tipos de TA — "Requer LPCO" (111), "Impede registro" (16)
+ * e "Alerta" (13) — e é o tipo, não o órgão, que responde a pergunta.
+ */
 const exigeLicenca = (t: Tratamento): boolean => {
-  const orgao = (t.orgao_npi ?? t.orgao_label ?? '').toString().toUpperCase();
-  return EXIGE_LI.some((o) => orgao.includes(o)) || !!val(t.modelo);
+  const tipo = (val(t.tipo_ta) ?? '').toLowerCase();
+  if (tipo.includes('lpco')) return true;
+  if (tipo.includes('alerta') || tipo.includes('impede')) return false;
+  // Sem tipo declarado, só um modelo de LPCO explícito sustenta a minuta.
+  return !!val(t.modelo);
 };
 
 
@@ -246,6 +261,15 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
     });
     setSalvo(true);
   };
+
+  /**
+   * Normas que o Portal Único não cita mas que o operador precisa. Ver
+   * src/engine/normasComplementares.ts.
+   */
+  const complementares = React.useMemo(
+    () => complementaresPara(val(data?.ncm.codigo) ?? ncm),
+    [data, ncm],
+  );
 
   // Agrupa por órgão, com os que impedem desembaraço primeiro (P6).
   const grupos: [string, Tratamento[]][] = React.useMemo(() => {
@@ -511,6 +535,40 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                 );
               })
             )}
+
+            {complementares.map((n) => (
+              <div key={n.identificacao} className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{n.identificacao}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-slate-600">{n.ementa}</p>
+                  </div>
+                  <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                    curadoria · fora do Portal Único
+                  </span>
+                </div>
+
+                <p className="mt-2.5 rounded-lg bg-white p-2.5 text-xs font-medium leading-relaxed text-slate-800 ring-1 ring-amber-100">
+                  {n.destaque}
+                </p>
+
+                <ul className="mt-2.5 space-y-1">
+                  {n.pontos.map((p, i) => (
+                    <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
+                      <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="mt-2 text-[10px] text-slate-400">
+                  Vigente desde {new Date(`${n.vigenciaDesde}T00:00:00`).toLocaleDateString('pt-BR')} ·{' '}
+                  <a href={n.fonte} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-amber-700">
+                    texto oficial no IBAMA
+                  </a>
+                </p>
+              </div>
+            ))}
 
             <p className="text-[10px] leading-relaxed text-slate-400">
               Fonte: SAT-Graph (Neo4j, snapshot NPI). Informativo — a incidência efetiva deve ser confirmada no Simulador de TA do Portal Único.

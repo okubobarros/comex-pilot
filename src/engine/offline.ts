@@ -53,6 +53,21 @@ export const NORMA_LOCAL: Record<string, { tipo: string; orgao_emissor: string; 
   'RDC 752/2022': { tipo: 'RDC', orgao_emissor: 'ANVISA', ementa: 'Norma-base de cosméticos (definição e classificação)' },
   'RDC 16/2014': { tipo: 'RDC', orgao_emissor: 'ANVISA', ementa: 'Autorização de Funcionamento de Empresa (AFE)' },
   'RDC 949/2024': { tipo: 'RDC', orgao_emissor: 'ANVISA', ementa: 'Cosméticos Grau 1 e Grau 2' },
+  // Cadeia normativa dos pneus, conferida no texto oficial do IBAMA.
+  'Resolução Conama 416/2009': {
+    tipo: 'Resolução CONAMA', orgao_emissor: 'CONAMA',
+    ementa: 'Prevenção à degradação ambiental causada por pneus inservíveis e sua destinação ambientalmente adequada.',
+  },
+  'Instrução Normativa IBAMA 9/2021': {
+    tipo: 'Instrução Normativa', orgao_emissor: 'IBAMA',
+    ementa: 'Procedimentos para cumprimento da Resolução Conama 416/2009 por fabricantes e importadores de pneus novos '
+      + '(coleta e destinação de pneus inservíveis). Art. 25: extingue a anuência prévia do IBAMA no Siscomex para LI '
+      + 'de pneus novos. Revoga a IN 01/2010.',
+  },
+  'Lei 12.305/2010': {
+    tipo: 'Lei', orgao_emissor: 'Congresso Nacional',
+    ementa: 'Institui a Política Nacional de Resíduos Sólidos.',
+  },
 };
 
 export function normaLocal(ref: string) {
