@@ -15,7 +15,7 @@
 import React, { useState } from 'react';
 import {
   AlertTriangle, ChevronDown, FileSignature, Loader2, Network, Printer,
-  Save, Search, ShieldAlert, ShieldCheck, X,
+  Info, Save, Search, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react';
 import { extractRef, extractRefs } from '../../engine/citacoes';
 import { complementaresPara } from '../../engine/normasComplementares';
@@ -146,10 +146,19 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
         ? [`Descrição hierárquica (${r.ncm.hierarquia?.length ?? 0} níveis): ${val(r.ncm.descricao_completa)}`]
         : []),
       `Cruzei as regras com ${r.total_orgaos} órgão(s) anuente(s): ${[...porOrgao.keys()].join(', ')}.`,
+      // Um órgão por linha, dizendo o que ELE exige. Antes a trilha somava
+      // tudo num "N regras exigem LPCO", metendo no mesmo balaio quem exige
+      // licença prévia e quem só tem obrigação depois do despacho.
       ...[...porOrgao.entries()].map(([orgao, ts]) => {
-        const vig = val(ts[0]?.vigencia);
-        const base = val(ts[0]?.base_legal);
-        return `${orgao}: ${ts.length} tratamento(s)${base ? ` — base ${base}` : ''}${vig ? ` · vigência ${vig}` : ''}.`;
+        const comLpco = ts.filter(exigeLicenca).length;
+        const alertas = ts.filter((t) => (val(t.tipo_ta) ?? '').toLowerCase().includes('alerta')).length;
+        const compl = complementaresPara(codigo, orgao)[0];
+        const veredito = comLpco > 0
+          ? `exige LPCO prévio (${comLpco} de ${ts.length}) — minuta disponível`
+          : alertas > 0
+            ? 'sem anuência prévia no Siscomex'
+            : `${ts.length} tratamento(s)`;
+        return `${orgao}: ${veredito}${compl ? `. ${compl.identificacao} — ${compl.destaque}` : '.'}`;
       }),
       bloqueios > 0
         ? `⚠️ ${bloqueios} regra(s) marcada(s) como IMPEDE DESEMBARAÇO — exigem LPCO deferido antes do registro.`
@@ -439,6 +448,9 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                         const bloqueiaEste = impedeDesembaraco(t);
                         // Todas as normas da base, não só a primeira.
                         const refs = extractRefs(t.base_legal);
+                        const eAlerta = (val(t.tipo_ta) ?? '').toLowerCase().includes('alerta');
+                        // Norma complementar deste órgão para este NCM, se houver.
+                        const compl = complementaresPara(val(data.ncm.codigo) ?? ncm, orgao)[0];
                         const titulo = val(t.tipo_ta) ?? val(t.nome_modelo) ?? 'Tratamento administrativo';
 
                         return (
@@ -454,6 +466,14 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                               {bloqueiaEste && (
                                 <span className="shrink-0 rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
                                   impede desembaraço
+                                </span>
+                              )}
+                              {/* "Alerta" não gera licença. Dizer isso no colapsado evita
+                                  que o operador abra a regra procurando um LPCO que não existe. */}
+                              {eAlerta && (
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-100">
+                                  <Info className="h-2.5 w-2.5" />
+                                  {compl ? 'obrigação pós-despacho' : 'sem anuência prévia'}
                                 </span>
                               )}
                               <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition ${isOpen ? 'rotate-180' : ''}`} />
@@ -513,6 +533,37 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                                       );
                                     })}
                                     <p className="mt-0.5 text-slate-400">{val(t.base_legal)}</p>
+                                  </div>
+                                )}
+
+                                {/* Sem licença a emitir: diz o que fazer no lugar.
+                                    O texto vem da norma complementar (com artigo e
+                                    fonte), não de suposição sobre o tipo do TA. */}
+                                {!exigeLicenca(t) && eAlerta && (
+                                  <div className="mt-1 rounded-lg border border-sky-200 bg-sky-50/60 p-2.5">
+                                    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700">
+                                      <Info className="h-3 w-3" /> Aconselhamento
+                                    </p>
+                                    {compl ? (
+                                      <>
+                                        <p className="mt-1 text-[11px] leading-relaxed text-slate-700">{compl.destaque}</p>
+                                        <p className="mt-1 text-[10px] text-slate-500">
+                                          {compl.identificacao} · vigente desde{' '}
+                                          {new Date(`${compl.vigenciaDesde}T00:00:00`).toLocaleDateString('pt-BR')} ·{' '}
+                                          <a href={compl.fonte} target="_blank" rel="noreferrer"
+                                             className="underline decoration-dotted underline-offset-2 hover:text-sky-700">
+                                            texto oficial
+                                          </a>
+                                          . Detalhamento no painel abaixo.
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p className="mt-1 text-[11px] leading-relaxed text-slate-700">
+                                        Tratamento informativo: não há LPCO a deferir antes do registro.
+                                        Confirme no Simulador do Portal Único se há obrigação acessória
+                                        associada a este NCM.
+                                      </p>
+                                    )}
                                   </div>
                                 )}
 
