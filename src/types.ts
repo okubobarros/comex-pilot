@@ -95,8 +95,30 @@ export interface LandedCostInputs {
   quantity: number;
   incoterm: string;
   entryPort: string;
+  /**
+   * Frete INTERNACIONAL, em USD. Compõe o valor aduaneiro (VMLD) junto com FOB
+   * e seguro, e é sobre ele que incide o AFRMM. Taxas locais de destino NAO
+   * entram aqui — ver `outrasDespesasBrl`.
+   */
   freightUsd: number;
   insuranceUsd: number;
+  /**
+   * Despesas aduaneiras no destino, em BRL: THC/capatazia, ISPS, drop off,
+   * BL fee, honorarios.
+   *
+   * Ficam FORA do valor aduaneiro — são custos posteriores à chegada, não
+   * compõem o CIF — mas entram na base do ICMS, que é calculado "por dentro"
+   * sobre o total das despesas aduaneiras. Somá-las ao frete internacional
+   * inflaria a base de II, IPI, PIS, COFINS e AFRMM, fazendo o importador
+   * recolher imposto a mais sobre um valor que a legislação não manda incluir.
+   *
+   * RESSALVA: a inclusão da capatazia no valor aduaneiro foi objeto de longa
+   * disputa entre a Receita e os importadores, decidida no STJ em favor da
+   * exclusão. É a posição adotada aqui, mas quem monta o custeio de uma
+   * operação concreta deve confirmá-la com o assessor tributário — o número
+   * muda conforme o entendimento aplicado.
+   */
+  outrasDespesasBrl?: number;
   iiRate: number;
   ipiRate: number;
   icmsRate: number;

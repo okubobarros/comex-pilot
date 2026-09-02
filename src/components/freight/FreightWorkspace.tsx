@@ -31,11 +31,28 @@ import FreightRadar, { Corredor } from './FreightRadar';
 import FreightMap, { ArcoRota } from './FreightMap';
 import { estimarTransito, temTarifaSuspeita } from '../../engine/freight';
 import type { Cotacao, LinhaCusto } from '../../engine/freight';
+import { porEntidade } from '../../engine/localCharges';
+import type { CustoLocal } from '../../engine/localCharges';
 
 interface FreightWorkspaceProps {
   onClose: () => void;
-  /** Leva o frete escolhido para o Custeio de Importação. */
-  onExportarParaCusteio: (dados: { freteUsd: number; porto: string; rotulo: string }) => void;
+  /**
+   * Leva o frete escolhido para o Custeio de Importação.
+   *
+   * `freteUsd` é o custo TOTAL (internacional + taxas locais de destino), que é
+   * o número que entra na base de cálculo. `freteInternacionalUsd` e
+   * `taxasLocaisUsd` vão junto para o custeio poder mostrar de onde veio — um
+   * total sem composição é um número que ninguém consegue defender.
+   */
+  onExportarParaCusteio: (dados: {
+    freteUsd: number;
+    porto: string;
+    rotulo: string;
+    freteInternacionalUsd?: number;
+    taxasLocaisUsd?: number;
+    containers?: number;
+    usdBrl?: number;
+  }) => void;
 }
 
 interface PortoOpt { unlocode: string; name: string }
@@ -122,6 +139,16 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
   const [selecionada, setSelecionada] = useState<Cotacao | null>(null);
   const [booking, setBooking] = useState<Cotacao | null>(null);
   const [buscaSalva, setBuscaSalva] = useState(false);
+  /**
+   * Quantidade de conteineres. Governa o custo local: taxa por BL e cobrada
+   * uma vez, taxa por CNTR multiplica. Sem esse numero nao da para somar as
+   * taxas de destino, so o frete internacional.
+   */
+  const [containers, setContainers] = useState('1');
+  /** PTAX do dia, para trazer as taxas em BRL para a mesma moeda do frete. */
+  const [ptax, setPtax] = useState<{ usdBrl: number; date: string } | null>(null);
+  const [custoLocal, setCustoLocal] = useState<CustoLocal | null>(null);
+  const [semTaxaLocal, setSemTaxaLocal] = useState<string | null>(null);
   /** Rede completa de corredores — desenha o mapa antes da primeira busca. */
   const [rede, setRede] = useState<Corredor[]>([]);
 
@@ -144,12 +171,49 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
       })
       .catch((e) => setErro(String(e)));
 
+    // Câmbio do dia. As taxas locais vêm em BRL e USD; sem uma taxa REAL não
+    // há como somá-las ao frete. Se a PTAX não responder, o custo local
+    // aparece separado por moeda em vez de convertido por um número chutado.
+    fetch('/api/ptax')
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.usdBrl > 0) setPtax({ usdBrl: d.usdBrl, date: d.date }); })
+      .catch(() => { /* segue sem conversão */ });
+
     // O canvas nunca abre vazio: sem busca ainda, mostra a rede inteira.
     fetch('/api/freight/radar?equipamento=40HQ')
       .then((r) => r.json())
       .then((d) => setRede(d.corredores ?? []))
       .catch(() => { /* mapa fica só com os continentes */ });
   }, []);
+
+  /**
+   * Taxas locais da cotação em foco.
+   *
+   * Refaz a cada troca de cotação, de quantidade ou de câmbio — as três mudam
+   * o resultado. O 404 é informação, não erro: a base cobre 12 portos
+   * brasileiros, e um destino fora dela precisa aparecer como "não temos",
+   * nunca como custo local zero.
+   */
+  useEffect(() => {
+    const q = selecionada?.quote;
+    if (!q) { setCustoLocal(null); setSemTaxaLocal(null); return; }
+    let cancelado = false;
+    const p = new URLSearchParams({
+      pod: q.pod,
+      carrier: q.carrier,
+      containers: String(Math.max(1, Number(containers) || 1)),
+      usdBrl: String(ptax?.usdBrl ?? 0),
+    });
+    fetch(`/api/freight/local-charges?${p}`)
+      .then(async (r) => ({ ok: r.ok, d: await r.json() }))
+      .then(({ ok, d }) => {
+        if (cancelado) return;
+        if (ok) { setCustoLocal(d); setSemTaxaLocal(null); }
+        else { setCustoLocal(null); setSemTaxaLocal(d?.error ?? 'sem taxas locais'); }
+      })
+      .catch(() => { if (!cancelado) { setCustoLocal(null); setSemTaxaLocal('falha ao consultar as taxas locais'); } });
+    return () => { cancelado = true; };
+  }, [selecionada, containers, ptax]);
 
   const buscar = async (over?: { pol: string; pod: string }) => {
     setCarregando(true);
@@ -388,6 +452,20 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
             </div>
           </Campo>
 
+          {/* Quantidade governa o custo local: taxa por BL é cobrada uma vez,
+              taxa por contêiner multiplica. Não vai na busca — só no cálculo
+              do painel de detalhe, então mudar aqui não refaz a consulta. */}
+          <Campo rotulo="Contêineres" className="min-w-[92px]">
+            <input
+              value={containers}
+              onChange={(e) => setContainers(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              placeholder="1"
+              inputMode="numeric"
+              title="Multiplica o frete e as taxas cobradas por contêiner; as taxas por BL são cobradas uma vez"
+              className={SELECT}
+            />
+          </Campo>
+
           <button
             onClick={() => buscar()}
             disabled={carregando}
@@ -538,13 +616,28 @@ export default function FreightWorkspace({ onClose, onExportarParaCusteio }: Fre
           <div className="sticky top-0 flex max-h-[calc(100vh-13rem)] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
             <PainelDetalhe
               c={selecionada}
+              custoLocal={custoLocal}
+              semTaxaLocal={semTaxaLocal}
+              ptax={ptax}
+              containers={Math.max(1, Number(containers) || 1)}
               onBooking={() => selecionada && setBooking(selecionada)}
               onCusteio={() =>
-                selecionada && onExportarParaCusteio({
-                  freteUsd: selecionada.totalUsd,
-                  porto: selecionada.quote.pod_name,
-                  rotulo: `${selecionada.quote.carrier} ${selecionada.quote.pol_name} → ${selecionada.quote.pod_name} (${selecionada.quote.equipment_type})`,
-                })
+                selecionada && (() => {
+                  const qtd = Math.max(1, Number(containers) || 1);
+                  const internacional = selecionada.totalUsd * qtd;
+                  // Sem PTAX o custo local não é somável — vai só o frete, e o
+                  // painel de detalhe já avisou o operador do porquê.
+                  const locais = ptax && custoLocal ? custoLocal.totalUsd : 0;
+                  onExportarParaCusteio({
+                    freteUsd: internacional + locais,
+                    freteInternacionalUsd: internacional,
+                    taxasLocaisUsd: locais,
+                    containers: qtd,
+                    usdBrl: ptax?.usdBrl,
+                    porto: selecionada.quote.pod_name,
+                    rotulo: `${selecionada.quote.carrier} ${selecionada.quote.pol_name} → ${selecionada.quote.pod_name} (${qtd}x ${selecionada.quote.equipment_type})`,
+                  });
+                })()
               }
             />
           </div>
@@ -705,8 +798,135 @@ function CardOpcao({ c, posicao, ehMaisBarata, selecionada, onSelecionar }: Card
 
 /* ------------------------------------------------------------------ */
 
-function PainelDetalhe({ c, onBooking, onCusteio }: {
-  c: Cotacao | null; onBooking: () => void; onCusteio: () => void;
+/**
+ * Taxas locais de destino no painel de detalhe.
+ *
+ * O frete internacional cobre até o costado; THC, ISPS, drop off, BL fee e as
+ * taxas do agente acontecem no porto brasileiro. Mostrar só o frete faz o
+ * operador fechar um custeio que vai estourar na fatura.
+ *
+ * A separação BL × contêiner fica VISÍVEL porque é ela que explica por que
+ * dobrar a carga não dobra a conta — e é o erro mais comum de quem soma na mão.
+ */
+function PainelTaxasLocais({ custo, indisponivel, ptax, freteUsd }: {
+  custo: CustoLocal | null;
+  indisponivel: string | null;
+  ptax: { usdBrl: number; date: string } | null;
+  freteUsd: number;
+}) {
+  if (indisponivel) {
+    return (
+      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Taxas locais de destino</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+          {indisponivel} A base cobre 12 portos brasileiros. Sem esse dado o total abaixo é
+          <strong className="font-semibold"> só o frete internacional</strong> — as taxas de destino
+          ainda vão existir na fatura.
+        </p>
+      </div>
+    );
+  }
+  if (!custo) return null;
+
+  const grupos = porEntidade(custo);
+  const semCambio = !ptax || ptax.usdBrl <= 0;
+  const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  return (
+    <>
+      <div className="mt-4 flex items-baseline justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Taxas locais · {custo.portoNome}
+        </p>
+        <span className="text-[10px] text-slate-400">
+          {custo.containers} ctr{custo.containers > 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div className="mt-1.5 overflow-hidden rounded-lg border border-slate-200">
+        {grupos.map((g) => (
+          <div key={g.entidade}>
+            <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{g.entidade}</span>
+              <span className="text-[10px] text-slate-400">
+                {g.tipo === 'CARRIER' ? 'armador' : 'agente de carga'}
+              </span>
+            </div>
+            {g.linhas.map((l, i) => (
+              <div key={`${l.fee_code}-${i}`} className="flex items-baseline justify-between gap-3 border-b border-slate-100 px-3 py-1.5 last:border-0">
+                <div className="min-w-0">
+                  <span className="block truncate text-xs text-slate-600">{l.fee_code}</span>
+                  <span className="block text-[10px] text-slate-400">
+                    {l.calculation_unit === 'CNTR'
+                      ? `${l.currency} ${l.unitario.toLocaleString('pt-BR')} × ${custo.containers} ctr`
+                      : 'uma vez por BL'}
+                  </span>
+                </div>
+                <span className="shrink-0 font-mono text-xs tabular-nums text-slate-700">
+                  {l.currency === 'BRL' ? brl(l.total) : usd(l.total)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div className="space-y-1 bg-slate-50 px-3 py-2.5">
+          <div className="flex items-baseline justify-between text-[11px]">
+            <span className="text-slate-500">Em reais</span>
+            <span className="font-mono tabular-nums text-slate-700">{brl(custo.porBlBrl + custo.porCntrBrl)}</span>
+          </div>
+          <div className="flex items-baseline justify-between text-[11px]">
+            <span className="text-slate-500">Em dólares</span>
+            <span className="font-mono tabular-nums text-slate-700">{usd(custo.porBlUsd + custo.porCntrUsd)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Sem PTAX não somamos moedas: um câmbio chutado erra o custeio inteiro. */}
+      {semCambio ? (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 p-2.5">
+          <p className="text-[11px] leading-relaxed text-amber-900">
+            Sem a PTAX do dia não converto as duas moedas — os valores acima ficam separados.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs font-semibold text-emerald-900">Custo total do frete</span>
+            <span className="font-display text-2xl font-bold tabular-nums tracking-tight text-emerald-700">
+              {usd(freteUsd + custo.totalUsd)}
+            </span>
+          </div>
+          <p className="mt-1 text-[10px] text-emerald-800/70">
+            frete {usd(freteUsd)} + taxas locais {usd(custo.totalUsd)} · PTAX {ptax!.usdBrl.toLocaleString('pt-BR', { minimumFractionDigits: 4 })} de {new Date(`${ptax!.date}T12:00:00`).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+      )}
+
+      {custo.ressalvas.length > 0 && (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 p-2.5">
+          <p className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+            <AlertTriangle className="h-3 w-3" /> Ressalva nas taxas
+          </p>
+          <ul className="space-y-1">
+            {custo.ressalvas.map((r, i) => (
+              <li key={i} className="text-[11px] leading-relaxed text-amber-900">• {r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PainelDetalhe({ c, onBooking, onCusteio, custoLocal, semTaxaLocal, ptax, containers }: {
+  c: Cotacao | null;
+  onBooking: () => void;
+  onCusteio: () => void;
+  custoLocal: CustoLocal | null;
+  semTaxaLocal: string | null;
+  ptax: { usdBrl: number; date: string } | null;
+  containers: number;
 }) {
   if (!c) {
     return (
@@ -769,12 +989,21 @@ function PainelDetalhe({ c, onBooking, onCusteio }: {
             </div>
           ))}
           <div className="flex items-baseline justify-between bg-slate-50 px-3 py-3">
-            <span className="text-xs font-semibold text-slate-700">Total estimado</span>
-            <span className="font-display text-2xl font-bold tabular-nums tracking-tight text-emerald-600">
-              {usd(c.totalUsd)}
+            <span className="text-xs font-semibold text-slate-700">
+              Frete internacional{containers > 1 ? ` · ${containers} ctrs` : ''}
+            </span>
+            <span className="font-display text-xl font-bold tabular-nums tracking-tight text-slate-800">
+              {usd(c.totalUsd * containers)}
             </span>
           </div>
         </div>
+
+        <PainelTaxasLocais
+          custo={custoLocal}
+          indisponivel={semTaxaLocal}
+          ptax={ptax}
+          freteUsd={c.totalUsd * containers}
+        />
 
         {c.alertas.length > 0 && (
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">

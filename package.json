@@ -16,7 +16,9 @@
     "load:freight": "node scripts/load_freight.mjs",
     "test:sql": "node scripts/test_sql.mjs",
     "gen:mapa": "node scripts/gen_world_path.mjs",
-    "test:citacoes": "tsx scripts/test_citacoes.ts"
+    "test:citacoes": "tsx scripts/test_citacoes.ts",
+    "test:taxas": "tsx scripts/test_local_charges.ts",
+    "etl:taxas": "python scripts/etl/parse_local_charges.py"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -3,7 +3,14 @@
 ETL das taxas locais de destino.
 
 Entrada:  TAXASLOCAISPORARMADOR_UNITIZADO_MOEDA.xlsx
-Saida:    seeds/freight/0005_local_charges.sql
+Saidas:   seeds/freight/0005_local_charges.sql   (Postgres/Supabase)
+          src/data/localCharges.json             (embarcado)
+
+Os DOIS artefatos saem da mesma leitura, como ja acontece com o frete
+internacional (parse_rate_sheet.py). O motivo e pratico: o servico de frete le
+a base embarcada por padrao e so vai ao Postgres com FREIGHT_SOURCE=db. Se as
+taxas locais existissem so no banco, o custo total ficaria zerado na
+configuracao padrao — sem erro nenhum aparecer, que e o pior tipo de falha.
 
 A planilha ja vem normalizada — uma taxa por linha, 7 colunas — entao aqui nao
 ha desagrupamento como no parse_rate_sheet.py. O trabalho e outro:
@@ -22,6 +29,7 @@ ha desagrupamento como no parse_rate_sheet.py. O trabalho e outro:
 
 Uso: python scripts/etl/parse_local_charges.py <caminho do xlsx>
 """
+import json
 import sys
 import unicodedata
 from pathlib import Path
@@ -31,6 +39,7 @@ import openpyxl
 
 RAIZ = Path(__file__).resolve().parents[2]
 SAIDA = RAIZ / "seeds" / "freight" / "0005_local_charges.sql"
+SAIDA_JSON = RAIZ / "src" / "data" / "localCharges.json"
 
 # Sigla local -> (UN/LOCODE, nome canonico). Conferido porto a porto: para
 # estes 12 o LOCODE e sempre 'BR' + sigla, mas a tabela fica explicita porque
@@ -229,6 +238,40 @@ def gerar(linhas, issues) -> str:
     return "\n".join(partes) + "\n"
 
 
+def gerar_json(linhas, issues) -> dict:
+    """Mesmo conteudo do seed, no formato que o motor embarcado consome."""
+    return {
+        "source_file": "TAXASLOCAISPORARMADOR_UNITIZADO_MOEDA.xlsx",
+        "charges": [
+            {
+                "port_unlocode": PORTOS[l["abrev"]][0],
+                "port_code": l["abrev"],
+                "port_name": PORTOS[l["abrev"]][1],
+                "entity_type": "FREIGHT_FORWARDER" if l["entidade"] in AGENTES else "CARRIER",
+                "entity_name": ALIAS.get(l["entidade"], l["entidade"]),
+                "fee_code": l["taxa"],
+                "currency": l["moeda"],
+                "amount": l["valor"],
+                "calculation_unit": l["unidade"],
+                "source_row": l["linha"],
+            }
+            for l in linhas
+        ],
+        "issues": [
+            {
+                "port_code": i["port_code"],
+                "entity_name": ALIAS.get(i["entity_name"], i["entity_name"]),
+                "fee_code": i["fee_code"],
+                "severity": i["severity"],
+                "kind": i["kind"],
+                "detail": i["detail"],
+                "source_row": i["source_row"],
+            }
+            for i in issues
+        ],
+    }
+
+
 def main():
     if len(sys.argv) < 2:
         print("uso: python scripts/etl/parse_local_charges.py <xlsx>")
@@ -259,7 +302,14 @@ def main():
     SAIDA.parent.mkdir(parents=True, exist_ok=True)
     SAIDA.write_text(gerar(linhas, issues), encoding="utf-8")
 
+    SAIDA_JSON.parent.mkdir(parents=True, exist_ok=True)
+    SAIDA_JSON.write_text(
+        json.dumps(gerar_json(linhas, issues), ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+
     print(f"{len(linhas)} taxas -> {SAIDA.relative_to(RAIZ)}")
+    print(f"{len(linhas)} taxas -> {SAIDA_JSON.relative_to(RAIZ)}")
     print(f"{len({l['abrev'] for l in linhas})} portos, {len({l['entidade'] for l in linhas})} entidades")
     if issues:
         print(f"\n{len(issues)} RESSALVA(S) — unidade de cobranca divergente:")

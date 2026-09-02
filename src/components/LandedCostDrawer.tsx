@@ -20,8 +20,23 @@ import CostingCanvas from './costing/CostingCanvas';
 
 interface LandedCostDrawerProps {
   onClose: () => void;
-  /** Frete trazido da Cotação de Frete Marítimo (ver freight/FreightWorkspace). */
-  seedFrete?: { freteUsd: number; porto: string; rotulo: string } | null;
+  /**
+   * Frete trazido da Cotação de Frete Marítimo (ver freight/FreightWorkspace).
+   *
+   * `freteUsd` já é o custo TOTAL — internacional mais taxas locais de destino.
+   * A composição vem junto para que o custeio possa DIZER de onde saiu o
+   * número: um valor de frete sem origem é o primeiro campo que alguém
+   * contesta na reunião, e sem isso não há como responder.
+   */
+  seedFrete?: {
+    freteUsd: number;
+    porto: string;
+    rotulo: string;
+    freteInternacionalUsd?: number;
+    taxasLocaisUsd?: number;
+    containers?: number;
+    usdBrl?: number;
+  } | null;
 }
 
 /**
@@ -45,6 +60,7 @@ const DEFAULTS: LandedCostInputs = {
   entryPort: 'Santos (SP)',
   freightUsd: 0,
   insuranceUsd: 0,
+  outrasDespesasBrl: 0,
   iiRate: 16,
   ipiRate: 10,
   icmsRate: 18,
@@ -130,10 +146,42 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
     if (!seedFrete) return;
     setInputs((prev) => {
       const porto = PORTOS_ENTRADA.find((p) => p.toLowerCase().startsWith(seedFrete.porto.toLowerCase()));
-      return { ...prev, freightUsd: seedFrete.freteUsd, entryPort: porto ?? prev.entryPort };
+      // O frete INTERNACIONAL vai para o campo de frete: é ele que compõe o
+      // valor aduaneiro. As taxas locais de destino vão para despesas
+      // aduaneiras, em BRL — elas entram na base do ICMS mas NÃO no VMLD.
+      // Somar tudo no frete faria o importador pagar II, IPI, PIS, COFINS e
+      // AFRMM sobre um valor que a legislação não manda incluir.
+      const internacional = seedFrete.freteInternacionalUsd ?? seedFrete.freteUsd;
+      const cambio = seedFrete.usdBrl && seedFrete.usdBrl > 0 ? seedFrete.usdBrl : prev.usdBrl;
+      const locaisBrl = Math.round((seedFrete.taxasLocaisUsd ?? 0) * cambio * 100) / 100;
+      return {
+        ...prev,
+        freightUsd: internacional,
+        outrasDespesasBrl: locaisBrl || prev.outrasDespesasBrl,
+        usdBrl: seedFrete.usdBrl && seedFrete.usdBrl > 0 ? seedFrete.usdBrl : prev.usdBrl,
+        entryPort: porto ?? prev.entryPort,
+      };
     });
-    setAiFilled((prev) => new Set(prev).add('freightUsd'));
-    setPrefillNote(`Frete de USD ${seedFrete.freteUsd.toLocaleString('pt-BR')} importado da cotação: ${seedFrete.rotulo}.`);
+    setAiFilled((prev) => {
+      const s = new Set(prev).add('freightUsd');
+      if ((seedFrete.taxasLocaisUsd ?? 0) > 0) s.add('outrasDespesasBrl');
+      return s;
+    });
+    const money = (v: number) => `USD ${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`;
+    // A composição só aparece quando as taxas locais realmente entraram. Sem
+    // PTAX elas vêm zeradas, e afirmar "inclui taxas locais" seria falso.
+    const temLocais = (seedFrete.taxasLocaisUsd ?? 0) > 0;
+    const cambioNota = seedFrete.usdBrl && seedFrete.usdBrl > 0 ? seedFrete.usdBrl : null;
+    setPrefillNote(
+      temLocais
+        ? `Cotação importada: ${seedFrete.rotulo}. `
+          + `${money(seedFrete.freteInternacionalUsd ?? 0)} de frete internacional (compõe o valor aduaneiro) `
+          + `e ${money(seedFrete.taxasLocaisUsd ?? 0)} de taxas locais no destino, lançadas como despesas `
+          + `aduaneiras — elas entram na base do ICMS, não no VMLD`
+          + `${cambioNota ? `. PTAX ${cambioNota.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}` : ''}.`
+        : `Frete de ${money(seedFrete.freteUsd)} importado da cotação: ${seedFrete.rotulo}. `
+          + 'Só o frete internacional — as taxas locais do destino ainda precisam ser somadas.',
+    );
   }, [seedFrete]);
 
   // Aplica um resultado de custeio (do backend ou do fallback local) na UI + trilha.
@@ -156,7 +204,7 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
   const computeLocal = () => {
     const r = resolveRatesLocal(inputs.ncm, ufFromPort(inputs.entryPort), dataFatoGerador);
     const result = computeCosting(
-      { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl },
+      { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl, outrasDespesasBrl: inputs.outrasDespesasBrl },
       r,
     );
     applyCosting(result, r, 'base local');
@@ -167,7 +215,8 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
     const corpo = {
       ncm: inputs.ncm, uf: ufFromPort(porto), modal: 'longo_curso',
       qtdeAdicoes: 1, fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd,
-      insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl, dataFatoGerador,
+      insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl,
+      outrasDespesasBrl: inputs.outrasDespesasBrl, dataFatoGerador,
     };
     try {
       const resp = await fetch('/api/costing', {
@@ -179,7 +228,7 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
     const rates = resolveRatesLocal(inputs.ncm, ufFromPort(porto), dataFatoGerador);
     return {
       r: computeCosting(
-        { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl },
+        { fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd, insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl, outrasDespesasBrl: inputs.outrasDespesasBrl },
         rates,
       ),
       rates,
@@ -205,7 +254,7 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
           ncm: inputs.ncm, uf: ufFromPort(inputs.entryPort), modal: 'longo_curso',
           qtdeAdicoes: 1, fobUsd: inputs.fobUsd, freightUsd: inputs.freightUsd,
           insuranceUsd: inputs.insuranceUsd, usdBrl: inputs.usdBrl,
-          dataFatoGerador,
+          outrasDespesasBrl: inputs.outrasDespesasBrl, dataFatoGerador,
         }),
       });
       const data = resp.ok ? await resp.json() : { success: false };
@@ -434,6 +483,20 @@ export default function LandedCostDrawer({ onClose, seedFrete }: LandedCostDrawe
               <div>
                 <label className={labelClass}>Seguro (USD)</label>
                 <input type="number" className={`${inputClass} font-mono`} value={inputs.insuranceUsd || ''} onChange={num('insuranceUsd')} />
+              </div>
+              {/* Despesas de destino ficam FORA do valor aduaneiro e DENTRO da
+                  base do ICMS. Por isso campo próprio, em BRL, e não somadas
+                  ao frete: no frete elas puxariam II, IPI, PIS, COFINS e AFRMM
+                  para cima sobre um valor que não compõe o CIF. */}
+              <div>
+                <label className={labelClass}>Despesas aduaneiras (BRL)</label>
+                <input
+                  type="number"
+                  className={`${inputClass} font-mono`}
+                  value={inputs.outrasDespesasBrl || ''}
+                  onChange={num('outrasDespesasBrl')}
+                  title="THC/capatazia, ISPS, drop off, BL fee e honorários no destino. Entram na base do ICMS, não no valor aduaneiro."
+                />
               </div>
               <div>
                 <label className={labelClass}>Alíquota II (%)</label>

@@ -42,6 +42,20 @@ const SUGGESTIONS: SuggestionPill[] = EXEMPLOS_INVOICE.map((e) => ({
   texto: e.texto,
 }));
 
+/**
+ * Frete a caminho do custeio. `freteUsd` é o custo TOTAL; a composição viaja
+ * junto para que tanto o chat quanto o formulário digam de onde veio o número.
+ */
+interface SeedFrete {
+  freteUsd: number;
+  porto: string;
+  rotulo: string;
+  freteInternacionalUsd?: number;
+  taxasLocaisUsd?: number;
+  containers?: number;
+  usdBrl?: number;
+}
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: 'msg-welcome',
   role: 'assistant',
@@ -64,7 +78,7 @@ export default function App() {
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('audit');
   // Frete cotado no comparador marítimo, a caminho do formulário de custeio.
-  const [seedFrete, setSeedFrete] = useState<{ freteUsd: number; porto: string; rotulo: string } | null>(null);
+  const [seedFrete, setSeedFrete] = useState<SeedFrete | null>(null);
   const [view, setView] = useState<AppView>('home');
   const [chatIntent, setChatIntent] = useState<ChatIntent>('audit');
   const { setEvidence } = useEvidence();
@@ -409,12 +423,25 @@ export default function App() {
    * Frete escolhido na Cotação de Frete Marítimo. Fica no App porque atravessa
    * dois canvas: sai do comparador e entra no formulário de custeio.
    */
-  const exportarFreteParaCusteio = (d: { freteUsd: number; porto: string; rotulo: string }) => {
+  const exportarFreteParaCusteio = (d: SeedFrete) => {
     setSeedFrete(d);
     setWorkspaceMode('landedCost');
+    const money = (v: number) => `USD ${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`;
+    // O chat só afirma que as taxas locais entraram quando entraram mesmo:
+    // sem PTAX elas vêm zeradas e o total é só o frete internacional.
+    const locais = d.taxasLocaisUsd ?? 0;
+    const texto = locais > 0
+      ? `Levei a cotação **${d.rotulo}** para o Custeio de Importação: `
+        + `**${money(d.freteInternacionalUsd ?? 0)}** de frete internacional no campo de frete — é ele que compõe o `
+        + `valor aduaneiro — e **${money(locais)}** de taxas locais do destino como despesas aduaneiras. `
+        + 'Separei os dois de propósito: taxa de destino não entra no VMLD, então somá-la ao frete faria você '
+        + 'recolher II, IPI, PIS, COFINS e AFRMM sobre um valor que a legislação não manda incluir. Ela entra, sim, '
+        + 'na base do ICMS.'
+      : `Levei o frete de **${money(d.freteUsd)}** (${d.rotulo}) para o Custeio de Importação. `
+        + 'Só o frete internacional — as taxas locais do destino ainda precisam ser somadas.';
     pushMessage({
       role: 'assistant',
-      text: `Levei o frete de **USD ${d.freteUsd.toLocaleString('pt-BR')}** (${d.rotulo}) para o Custeio de Importação e ajustei o porto de entrada para **${d.porto}** — o ICMS depende da UF de desembaraço.`,
+      text: `${texto} Ajustei o porto de entrada para **${d.porto}** — o ICMS depende da UF de desembaraço.`,
     });
   };
 

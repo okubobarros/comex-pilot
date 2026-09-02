@@ -17,11 +17,15 @@
  *   GET /api/freight/options  -> portos, armadores e equipamentos disponíveis
  *   GET /api/freight/quotes   -> cotações filtradas e ordenadas por custo total
  *   GET /api/freight/issues   -> trilha de qualidade da carga
+ *   GET /api/freight/local-charges -> taxas locais do porto de destino
  */
 import type { Request, Response } from 'express';
 import pg from 'pg';
 import dataset from '../src/data/freightRates.json' with { type: 'json' };
+import taxasLocais from '../src/data/localCharges.json' with { type: 'json' };
 import { cotar, ordenarPorCusto, FreightQuote, Surcharge } from '../src/engine/freight.js';
+import { calcularCustoLocal } from '../src/engine/localCharges.js';
+import type { ChargeIssue, LocalCharge } from '../src/engine/localCharges.js';
 
 let pool: pg.Pool | null = null;
 function getPool(): pg.Pool | null {
@@ -221,6 +225,50 @@ export async function freightQuotesHandler(req: Request, res: Response) {
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Taxas locais de destino
+ * ------------------------------------------------------------------ */
+const CHARGES = taxasLocais.charges as LocalCharge[];
+const CHARGE_ISSUES = taxasLocais.issues as ChargeIssue[];
+
+/**
+ * GET /api/freight/local-charges
+ *
+ * Query: pod (UN/LOCODE), carrier, containers, usdBrl, incluirAgente.
+ *
+ * Devolve 404 — não um total zerado — quando o porto ou o armador não tem
+ * taxa cadastrada. "Não sabemos" e "não custa nada" são respostas diferentes,
+ * e um R$ 0,00 exibido como resultado é a pior das duas.
+ */
+export function freightLocalChargesHandler(req: Request, res: Response) {
+  const q = req.query as Record<string, string>;
+  const pod = (q.pod || '').toUpperCase();
+  const carrier = (q.carrier || '').toUpperCase();
+  if (!pod || !carrier) {
+    res.status(400).json({ error: 'Informe pod (UN/LOCODE) e carrier.' });
+    return;
+  }
+  const custo = calcularCustoLocal(CHARGES, CHARGE_ISSUES, {
+    pod,
+    carrier,
+    containers: num(q.containers) ?? 1,
+    usdBrl: num(q.usdBrl) ?? 0,
+    incluirAgente: q.incluirAgente !== 'false',
+  });
+  if (!custo) {
+    res.status(404).json({
+      error: `Sem taxas locais cadastradas para ${carrier} em ${pod}.`,
+      pod,
+      carrier,
+      // A base cobre 12 portos brasileiros; dizer quais evita a impressão de
+      // que a resposta vale para qualquer destino.
+      portos_cobertos: [...new Set(CHARGES.map((c) => c.port_unlocode))].sort(),
+    });
+    return;
+  }
+  res.json({ ...custo, source_file: taxasLocais.source_file });
 }
 
 /** GET /api/freight/issues — o que o ETL não conseguiu afirmar com certeza. */
