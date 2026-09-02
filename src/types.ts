@@ -61,8 +61,11 @@ export type TaskId =
   | 'ncm'
   | 'antidumping';
 
-/** Modo do canvas da direita: auditoria, Landed Cost ou Conformidade (SAT-Graph) */
-export type WorkspaceMode = 'audit' | 'landedCost' | 'compliance' | 'freight';
+/**
+ * Qual canvas ocupa a coluna central. Cada item do menu lateral tem o seu:
+ * sem um modo próprio, a rota caía na tela genérica de auditoria vazia.
+ */
+export type WorkspaceMode = 'audit' | 'classify' | 'landedCost' | 'compliance' | 'freight';
 
 /** Intenção multimodal ativa na barra de comando do chat */
 export type ChatIntent = 'audit' | 'classify' | 'risk';

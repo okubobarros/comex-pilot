@@ -1,100 +1,48 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Roteador do canvas central. Cada item do menu lateral tem aqui o SEU
+ * componente — nenhuma rota cai mais numa tela genérica de fallback.
+ *
+ *   audit       → AuditorWorkspace       (vazio) / AuditWorkspace (com veredito)
+ *   classify    → NcmClassifierWorkspace
+ *   compliance  → ComplianceWorkspace
+ *   freight     → FreightWorkspace
+ *   landedCost  → LandedCostDrawer
+ *
+ * O `status` só governa o modo 'audit', que é o único com ciclo de vida
+ * (aguardando documento → processando → veredito). Os demais canvas buscam os
+ * próprios dados e cuidam do próprio estado de carga.
  */
 
-import React, { useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle,
-  DollarSign,
-  FileSpreadsheet,
-  Info,
-  Loader2,
-  ShieldAlert,
-  Sparkles,
-  TrendingUp,
-  Calculator,
-  ChevronRight,
-  Boxes
-} from 'lucide-react';
-import Logo from './Logo';
+import React from 'react';
 import LandedCostDrawer from './LandedCostDrawer';
 import AuditWorkspace from './audit/AuditWorkspace';
+import AuditorWorkspace from './audit/AuditorWorkspace';
+import NcmClassifierWorkspace from './classify/NcmClassifierWorkspace';
 import ComplianceWorkspace from './compliance/ComplianceWorkspace';
 import FreightWorkspace from './freight/FreightWorkspace';
+import type { ArquivoEnviado } from './ChatPanel';
 import { AuditAlert, InvoiceAnalysis, InvoiceItem, WorkspaceMode, WorkspaceStatus } from '../types';
 
 interface WorkspaceProps {
   status: WorkspaceStatus;
   mode: WorkspaceMode;
   analysis: InvoiceAnalysis | null;
-  savingsBrl: number;
   onGenerateLi: (item: InvoiceItem) => void;
   onAlertInquire: (alert: AuditAlert) => void;
-  onOpenLandedCost: () => void;
+  /** Dispara a auditoria com o texto de uma fatura de exemplo. */
+  onExemploAuditoria: (texto: string) => void;
+  /** Documento largado na dropzone do canvas de auditoria. */
+  onArquivoAuditoria: (arquivo: ArquivoEnviado) => void;
+  isBusy?: boolean;
   onCloseLandedCost: () => void;
   onExportarFrete: (d: { freteUsd: number; porto: string; rotulo: string }) => void;
   seedFrete?: { freteUsd: number; porto: string; rotulo: string } | null;
 }
 
-const formatCurrency = (val: number, curr: string = 'USD') =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: curr }).format(val);
-
-const getRiskBadgeColor = (score: number) => {
-  if (score >= 70) return 'border-rose-300 bg-rose-100 text-rose-800';
-  if (score >= 30) return 'border-amber-300 bg-amber-100 text-amber-800';
-  return 'border-emerald-300 bg-emerald-100 text-emerald-800';
-};
-
-const getRiskLabel = (score: number) => {
-  if (score >= 70) return 'Risco Alto';
-  if (score >= 30) return 'Risco Médio';
-  return 'Risco Baixo';
-};
-
-const getSeverityStyles = (severity: string) => {
-  switch (severity) {
-    case 'red':
-      return {
-        bg: 'border-rose-200 bg-rose-50/60',
-        border: 'border-l-4 border-l-rose-500',
-        badge: 'bg-rose-100 text-rose-800',
-        icon: <ShieldAlert className="h-4 w-4 text-rose-600" />,
-        label: 'Bloqueio'
-      };
-    case 'yellow':
-      return {
-        bg: 'border-amber-200 bg-amber-50/60',
-        border: 'border-l-4 border-l-amber-500',
-        badge: 'bg-amber-100 text-amber-800',
-        icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
-        label: 'Atenção'
-      };
-    case 'green':
-      return {
-        bg: 'border-emerald-200 bg-emerald-50/60',
-        border: 'border-l-4 border-l-emerald-500',
-        badge: 'bg-emerald-100 text-emerald-800',
-        icon: <TrendingUp className="h-4 w-4 text-emerald-600" />,
-        label: 'Oportunidade'
-      };
-    default:
-      return {
-        bg: 'border-slate-200 bg-slate-50',
-        border: 'border-l-4 border-l-slate-400',
-        badge: 'bg-slate-100 text-slate-800',
-        icon: <Info className="h-4 w-4 text-slate-500" />,
-        label: 'Regular'
-      };
-  }
-};
-
-export default function Workspace({ status, mode, analysis, savingsBrl, onGenerateLi, onAlertInquire, onOpenLandedCost, onCloseLandedCost, onExportarFrete, seedFrete }: WorkspaceProps) {
-  // Botão de minuta em estado "Gerando..." (id do alerta ou do item)
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
-
+export default function Workspace({ status, mode, analysis, onGenerateLi, onAlertInquire, onExemploAuditoria, onArquivoAuditoria, isBusy, onCloseLandedCost, onExportarFrete, seedFrete }: WorkspaceProps) {
   // Skill densa ocupa o canvas por cima de qualquer estado de auditoria
   if (mode === 'landedCost') {
     return <LandedCostDrawer onClose={onCloseLandedCost} seedFrete={seedFrete} />;
@@ -108,68 +56,22 @@ export default function Workspace({ status, mode, analysis, savingsBrl, onGenera
     return <FreightWorkspace onClose={onCloseLandedCost} onExportarParaCusteio={onExportarFrete} />;
   }
 
-  // Vincula um alerta ao item da fatura correspondente para prefill da LI
-  const itemForAlert = (alert: AuditAlert): InvoiceItem | undefined => {
-    if (!analysis) return undefined;
-    return (
-      analysis.items.find(item =>
-        alert.affectedItems?.some(name => item.description.includes(name) || name.includes(item.description))
-      ) ?? analysis.items[0]
-    );
-  };
+  if (mode === 'classify') {
+    return <NcmClassifierWorkspace />;
+  }
 
-  const startGenerating = (key: string, item: InvoiceItem) => {
-    if (generatingId) return;
-    setGeneratingId(key);
-    setTimeout(() => {
-      setGeneratingId(null);
-      onGenerateLi(item);
-    }, 1500);
-  };
-
-  /* ---------- EMPTY: boas-vindas + cards de skills ---------- */
+  /* ---------- EMPTY: canvas próprio de "Auditar Documentos" ---------- */
+  // Antes aqui morava uma tela genérica ("Workspace de Auditoria — aguardando
+  // documento") servida a QUALQUER modo sem conteúdo, com um card de skill
+  // duplicando o menu lateral e um "Roteiro de Nacionalização · em breve" que
+  // não abria nada. Agora o modo tem a sua tela, com dropzone e exemplos.
   if (status === 'empty') {
     return (
-      <section className="flex h-full flex-1 items-center justify-center overflow-y-auto bg-slate-50" id="workspace-empty">
-        <div className="w-full max-w-lg px-8 text-center">
-          <Logo className="mx-auto mb-6 h-16 w-16" />
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
-            Workspace de Auditoria
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            Aguardando documento ou comando de voz para iniciar a auditoria — ou abra uma skill estruturada abaixo.
-          </p>
-
-          <div className="mt-8 space-y-2.5 text-left">
-            <span className="block text-center font-mono text-[10px] uppercase tracking-widest text-slate-400">Skills de missão</span>
-            <button
-              onClick={onOpenLandedCost}
-              className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-indigo-300 hover:shadow-md"
-              id="skill-landed-cost"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
-                <Calculator className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <span className="block text-sm font-semibold text-slate-900">Custeio e Viabilidade (Landed Cost)</span>
-                <span className="block text-xs text-slate-400">Formulário assistido em 3 passos: impostos, câmbio e margem alvo</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-indigo-500" />
-            </button>
-
-            <div className="flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-left opacity-70">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-400">
-                <Boxes className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <span className="block text-sm font-semibold text-slate-500">Roteiro de Nacionalização</span>
-                <span className="block text-xs text-slate-400">Passo a passo DI/Duimp · em breve</span>
-              </div>
-              <span className="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">Em breve</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <AuditorWorkspace
+        onExemplo={onExemploAuditoria}
+        onArquivo={onArquivoAuditoria}
+        isBusy={isBusy}
+      />
     );
   }
 

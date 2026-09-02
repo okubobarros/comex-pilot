@@ -18,6 +18,10 @@ import EvidencePanel from './components/os/EvidencePanel';
 import type { Processo } from './context/ProcessContext';
 import { useEvidence } from './context/EvidenceContext';
 import { useProcessos } from './context/ProcessContext';
+import { EXEMPLOS_INVOICE } from './data/exemplosInvoice';
+
+/** Quebra de linha nas respostas em markdown do copiloto. */
+const QUEBRA = '\n';
 
 const CHAT_THOUGHTS = [
   '🔍 Lendo documento...',
@@ -26,40 +30,17 @@ const CHAT_THOUGHTS = [
 ];
 
 /**
- * Exemplos de ENTRADA, não de saída. Cada pílula cola um texto de invoice
- * plausível na esteira real de auditoria — o resultado é calculado na hora pelo
- * mesmo motor que atende um documento do cliente. Antes elas devolviam análises
- * pré-fabricadas, o que dava a impressão de um veredito que ninguém computou.
+ * As pílulas do chat e os botões de demonstração do canvas de auditoria saem da
+ * MESMA lista (`data/exemplosInvoice.ts`). Antes o texto vivia só aqui; com uma
+ * segunda tela oferecendo exemplos, duas cópias divergiriam no primeiro ajuste.
+ *
+ * Continuam sendo exemplos de ENTRADA, não de saída: cada uma cola um texto de
+ * invoice na esteira real e o veredito é calculado na hora.
  */
-const QUEBRA = '\n';
-
-const SUGGESTIONS: SuggestionPill[] = [
-  {
-    label: 'Exemplo: invoice de cosméticos (Coreia)',
-    texto: [
-      'COMMERCIAL INVOICE — SEOUL BEAUTY CO. LTD (KR)',
-      '1. Hydrating facial cream, NCM 3304.99.90, 5.000 un x USD 2.10, origin: South Korea',
-      '2. Aloe vera gel 300ml, NCM 3304.99.90, 3.000 un x USD 1.40, origin: South Korea',
-      'Incoterm: FOB Busan · Total FOB USD 14.700',
-    ].join(QUEBRA),
-  },
-  {
-    label: 'Exemplo: garrafas térmicas (China)',
-    texto: [
-      'COMMERCIAL INVOICE — NINGBO HOMEWARE TRADING CO.',
-      '1. Stainless steel vacuum tumbler 900ml, NCM 9617.00.10, 5.000 un x USD 3.80, origin: China',
-      'Incoterm: FOB Ningbo · Total FOB USD 19.000',
-    ].join(QUEBRA),
-  },
-  {
-    label: 'Exemplo: resina epóxi (EUA)',
-    texto: [
-      'COMMERCIAL INVOICE — MIDWEST POLYMERS INC (US)',
-      '1. Epoxy resin, industrial grade, NCM 3907.30.11, 18.000 kg x USD 2.50, origin: USA',
-      'Incoterm: CFR Santos · Total USD 45.000',
-    ].join(QUEBRA),
-  },
-];
+const SUGGESTIONS: SuggestionPill[] = EXEMPLOS_INVOICE.map((e) => ({
+  label: `Exemplo: ${e.label.replace(/^Invoice de /, '')}`,
+  texto: e.texto,
+}));
 
 const WELCOME_MESSAGE: ChatMessage = {
   id: 'msg-welcome',
@@ -326,8 +307,19 @@ export default function App() {
 
   const handleSuggestion = (pill: SuggestionPill) => {
     if (isBusy) return;
-    pushMessage({ role: 'user', text: pill.texto });
-    auditFromText(pill.texto);
+    rodarExemploAuditoria(pill.texto);
+  };
+
+  /**
+   * Exemplo acionado no canvas de auditoria. Passa pela MESMA esteira das
+   * pílulas do chat: o texto entra como mensagem do usuário e o veredito é
+   * calculado agora, não recuperado de um cenário pronto.
+   */
+  const rodarExemploAuditoria = (texto: string) => {
+    if (isBusy) return;
+    setWorkspaceMode('audit');
+    pushMessage({ role: 'user', text: texto });
+    auditFromText(texto);
   };
 
   const handleSendText = (text: string, intent: ChatIntent) => {
@@ -469,8 +461,18 @@ export default function App() {
       return;
     }
 
-    // Intenções cobertas hoje pela barra de comando multimodal
-    if (taskId === 'audit' || taskId === 'classify' || taskId === 'risk') {
+    // Classificação tem canvas próprio: busca, árvore da NCM e carga tributária.
+    // Antes caía no modo 'audit' e o usuário via a tela de auditoria vazia.
+    if (taskId === 'classify') {
+      setChatIntent('classify');
+      setWorkspaceMode('classify');
+      setView('workspace');
+      pushMessage({ role: 'assistant', text: INTENT_HINTS.classify! });
+      return;
+    }
+
+    // Auditoria abre o canvas de entrada de documento; risco segue pelo chat.
+    if (taskId === 'audit' || taskId === 'risk') {
       setChatIntent(taskId);
       setWorkspaceMode('audit');
       setView('workspace');
@@ -565,7 +567,7 @@ export default function App() {
     : workspaceMode === 'landedCost' ? 'landedCost'
     : workspaceMode === 'compliance' ? 'compliance'
     : workspaceMode === 'freight' ? 'freight'
-    : chatIntent === 'classify' ? 'classify'
+    : workspaceMode === 'classify' ? 'classify'
     : 'audit';
 
   // Abre um processo do Kanban carregando o agente responsável.
@@ -624,10 +626,11 @@ export default function App() {
             status={workspaceStatus}
             mode={workspaceMode}
             analysis={activeAnalysis}
-            savingsBrl={activeAnalysis ? computeSavingsBrl(activeAnalysis.items, customRules) : 0}
             onGenerateLi={openLiMinuta}
             onAlertInquire={handleAlertInquire}
-            onOpenLandedCost={openLandedCost}
+            onExemploAuditoria={rodarExemploAuditoria}
+            onArquivoAuditoria={(a) => handleFile(a, 'audit')}
+            isBusy={isBusy}
             onExportarFrete={exportarFreteParaCusteio}
             seedFrete={seedFrete}
             onCloseLandedCost={closeLandedCost}
