@@ -15,7 +15,8 @@
     "etl:freight": "python scripts/etl/parse_rate_sheet.py",
     "load:freight": "node scripts/load_freight.mjs",
     "test:sql": "node scripts/test_sql.mjs",
-    "gen:mapa": "node scripts/gen_world_path.mjs"
+    "gen:mapa": "node scripts/gen_world_path.mjs",
+    "test:citacoes": "tsx scripts/test_citacoes.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

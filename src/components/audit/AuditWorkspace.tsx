@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, FileSignature, Loader2, Download, PenLine, ShieldAlert, TrendingUp } from 'lucide-react';
 import { AuditAlert, InvoiceAnalysis, InvoiceItem } from '../../types';
 import { normaLocal } from '../../engine/offline';
+import { extractRef } from '../../engine/citacoes';
 
 interface AuditWorkspaceProps {
   analysis: InvoiceAnalysis;
@@ -28,12 +29,6 @@ const sev = (s: string) =>
   s === 'red' ? { dot: 'bg-rose-500', chip: 'bg-rose-100 text-rose-700', label: 'Bloqueio', icon: <ShieldAlert className="h-3.5 w-3.5 text-rose-600" /> }
   : s === 'yellow' ? { dot: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700', label: 'Atenção', icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> }
   : { dot: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-700', label: 'Oportunidade', icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-600" /> };
-
-// Extrai a 1ª norma citável (ex.: "RDC nº 752/2022" → "RDC 752/2022") do texto de base legal.
-function extractRef(baseLegal: string): string | null {
-  const m = baseLegal.match(/(RDC|LC|IN RFB|Decreto|Resolução GECEX|Portaria SECEX)\s*n?[º°]?\s*([\d.]+\/\d{4})/i);
-  return m ? `${m[1]} ${m[2]}`.replace(/\s+/g, ' ') : null;
-}
 
 export default function AuditWorkspace({ analysis, onGenerateLi, onAlertInquire }: AuditWorkspaceProps) {
   const [openId, setOpenId] = useState<string | null>(analysis.alerts[0]?.id ?? null);

@@ -17,6 +17,7 @@ import {
   AlertTriangle, ChevronDown, FileSignature, Loader2, Network, Printer,
   Save, Search, ShieldAlert, ShieldCheck, X,
 } from 'lucide-react';
+import { extractRef, extractRefs } from '../../engine/citacoes';
 import { useEvidence } from '../../context/EvidenceContext';
 import { useProcessos } from '../../context/ProcessContext';
 import LiMinutaModal from '../LiMinutaModal';
@@ -94,28 +95,6 @@ const exigeLicenca = (t: Tratamento): boolean => {
   return EXIGE_LI.some((o) => orgao.includes(o)) || !!val(t.modelo);
 };
 
-/**
- * Extrai a 1ª norma citável do texto de base legal (mesmo padrão do AuditWorkspace).
- * O grafo traz dois formatos: com barra ("Lei 9782/99", "RDC 752/2022") e por
- * extenso ("Lei n° 9.112, de 10 de outubro de 1995"). Cobrimos ambos.
- */
-export function extractRef(baseLegal?: string | null): string | null {
-  if (!baseLegal) return null;
-
-  // Formato 1 — número/ano: "Lei 9782/99", "RDC 752/2022", "Portaria Secex nº 23/2011"
-  const barra = baseLegal.match(
-    /(RDC|LC|IN RFB|IN|Decreto[- ]Lei|Decreto|Lei|Portaria Secex|Portaria|Resolução Gecex|Resolução)\s*n?[º°]?\s*([\d.]+\/\d{2,4})/i,
-  );
-  if (barra) return `${barra[1]} ${barra[2]}`.replace(/\s+/g, ' ');
-
-  // Formato 2 — por extenso: "Lei n° 9.112, de 10 de outubro de 1995" → "Lei 9.112/1995"
-  const extenso = baseLegal.match(
-    /(RDC|LC|IN RFB|IN|Decreto[- ]Lei|Decreto|Lei|Portaria|Resolução)\s*n?[º°]?\s*([\d.]+)\s*,?\s*de\s+[^,]{0,40}?(\d{4})/i,
-  );
-  if (extenso) return `${extenso[1]} ${extenso[2]}/${extenso[3]}`.replace(/\s+/g, ' ');
-
-  return null;
-}
 
 export default function ComplianceWorkspace({ onClose }: { onClose: () => void }) {
   const [ncm, setNcm] = useState('2933.39.99');
@@ -169,10 +148,13 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
     // Citações: normas efetivamente presentes na resposta (sem inventar).
     const refs = new Map<string, string>();
     r.tratamentos.forEach((t) => {
-      const ref = extractRef(t.base_legal);
-      if (ref && !refs.has(ref)) {
-        refs.set(ref, `${val(t.orgao_npi) ?? 'Órgão'} · ${val(t.base_legal) ?? ''}`.trim());
-      }
+      // TODAS as normas, não só a primeira: a base dos pneus tem cinco, e a que
+      // rege pneus inservíveis (Conama 416/2009) não é a primeira da lista.
+      extractRefs(t.base_legal).forEach((ref) => {
+        if (!refs.has(ref)) {
+          refs.set(ref, `${val(t.orgao_npi) ?? 'Órgão'} · ${val(t.base_legal) ?? ''}`.trim());
+        }
+      });
     });
 
     setEvidence({
@@ -431,8 +413,8 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                         const chave = `${orgao}-${i}`;
                         const isOpen = aberto === chave;
                         const bloqueiaEste = impedeDesembaraco(t);
-                        const ref = extractRef(t.base_legal);
-                        const nd = ref ? norma[ref] : undefined;
+                        // Todas as normas da base, não só a primeira.
+                        const refs = extractRefs(t.base_legal);
                         const titulo = val(t.tipo_ta) ?? val(t.nome_modelo) ?? 'Tratamento administrativo';
 
                         return (
@@ -463,29 +445,50 @@ export default function ComplianceWorkspace({ onClose }: { onClose: () => void }
                                   {val(t.inspecao) && <span>Inspeção: {val(t.inspecao)}</span>}
                                 </div>
 
-                                {/* Base legal clicável (P3) */}
+                                {/* Base legal clicável (P3) — uma pílula por norma */}
                                 {val(t.base_legal) && (
                                   <div>
                                     <span className="font-semibold text-slate-500">Base legal: </span>
-                                    {ref ? (
-                                      <button
-                                        onClick={() => carregarNorma(ref)}
-                                        className="font-mono text-teal-700 underline decoration-dotted underline-offset-2 hover:text-teal-900"
-                                      >
-                                        {ref}
-                                      </button>
-                                    ) : (
+                                    {refs.length === 0 ? (
                                       <span className="text-slate-600">{val(t.base_legal)}</span>
+                                    ) : (
+                                      <span className="inline-flex flex-wrap gap-1 align-middle">
+                                        {refs.map((r) => (
+                                          <button
+                                            key={r}
+                                            onClick={() => carregarNorma(r)}
+                                            className="rounded-md bg-teal-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-800 ring-1 ring-teal-100 transition-colors duration-150 hover:bg-teal-100"
+                                          >
+                                            {r}
+                                          </button>
+                                        ))}
+                                      </span>
                                     )}
-                                    {nd === 'loading' && <span className="ml-1 inline-flex items-center gap-1 text-slate-400"><Loader2 className="h-3 w-3 animate-spin" /> …</span>}
-                                    {nd === 'erro' && <span className="ml-1 text-amber-600">(texto não disponível na base)</span>}
-                                    {nd && typeof nd === 'object' && (
-                                      <div className="mt-1 rounded-lg bg-white p-2 text-slate-600 ring-1 ring-slate-200">
-                                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-400">{nd.tipo} · {nd.orgao_emissor}</span>
-                                        {nd.ementa}
-                                      </div>
-                                    )}
-                                    {ref && <p className="mt-0.5 text-slate-400">{val(t.base_legal)}</p>}
+                                    {refs.map((r) => {
+                                      const nd = norma[r];
+                                      if (!nd) return null;
+                                      return (
+                                        <div key={`n-${r}`} className="mt-1">
+                                          {nd === 'loading' && (
+                                            <span className="inline-flex items-center gap-1 text-slate-400">
+                                              <Loader2 className="h-3 w-3 animate-spin" /> consultando {r}…
+                                            </span>
+                                          )}
+                                          {nd === 'erro' && (
+                                            <span className="text-amber-600">{r}: texto não disponível na base.</span>
+                                          )}
+                                          {typeof nd === 'object' && (
+                                            <div className="rounded-lg bg-white p-2 text-slate-600 ring-1 ring-slate-200">
+                                              <span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                                                {r} · {nd.tipo} · {nd.orgao_emissor}
+                                              </span>
+                                              {nd.ementa}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    <p className="mt-0.5 text-slate-400">{val(t.base_legal)}</p>
                                   </div>
                                 )}
 
